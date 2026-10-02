@@ -3,125 +3,150 @@ import os
 import struct
 import sys
 import time
+
 from bit_stream import BitReader
-from shannon import generate_shannon_o2_codes
+from shannon import generate_shannon_o2_codes_from_freq
+
+MAGIC = b"TDI2"
+HEADER_FORMAT = ">QQBI32s"
+ENTRY_FORMAT = ">BBQ"
+HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
+ENTRY_SIZE = struct.calcsize(ENTRY_FORMAT)
+
+def _read_exact(file_object, size: int, description: str) -> bytes:
+  data = file_object.read(size)
+  if len(data) != size:
+    raise ValueError(f"Archivo truncado al leer {description}.")
+  return data
 
 
-def calculate_sha256(filepath: str) -> str:
-    """Calcula el hash SHA-256 de un archivo para validar su integridad byte a byte."""
-    hasher = hashlib.sha256()
-    with open(filepath, "rb") as f:
-        while chunk := f.read(65536):
-            hasher.update(chunk)
-    return hasher.hexdigest()
+def _same_path(first_path: str, second_path: str) -> bool:
+  return os.path.normcase(os.path.abspath(first_path)) == os.path.normcase(
+    os.path.abspath(second_path)
+  )
 
 
-def decompress(input_path: str, output_path: str):
-    """Lee un archivo .tdi, valida la cabecera, decodifica los datos y reconstruye el original."""
-    if not os.path.exists(input_path):
-        print(f"Error: El archivo de entrada '{input_path}' no existe.")
-        sys.exit(1)
+def decompress(input_path: str, output_path: str, verbose: bool = True):
+  """Descomprime y valida un contenedor TDI2 antes de escribir la salida."""
+  if not os.path.isfile(input_path):
+    raise FileNotFoundError(f"El archivo de entrada '{input_path}' no existe.")
+  if _same_path(input_path, output_path):
+    raise ValueError("La entrada y la salida deben ser archivos distintos.")
 
-    start_time = time.time()
-    compressed_size = os.path.getsize(input_path)
+  start_time = time.perf_counter()
+  compressed_size = os.path.getsize(input_path)
 
-    with open(input_path, "rb") as in_file:
-        # 1. Validar Magic Bytes
-        magic = in_file.read(4)
-        if magic != b"TDI1":
-            print(
-                "Error: Cabecera invalida o archivo incompatible (Magic bytes incorrecots)."
-            )
-            sys.exit(1)
+  with open(input_path, "rb") as in_file:
+    magic = _read_exact(in_file, 4, "magic bytes")
+    if magic != MAGIC:
+      raise ValueError("Formato incompatible: se esperaba un archivo TDI2.")
 
-        # 2. Leer Metadatos (Tamaño original, Padding y Cantidad de Pares)
-        header_data = in_file.read(11)  # 8 bytes (Q) + 1 byte (B) + 2 bytes (H)
-        if len(header_data) < 11:
-            print("Error: Datos insuficientes en la cabecera.")
-            sys.exit(1)
+    header_data = _read_exact(in_file, HEADER_SIZE, "cabecera TDI2")
+    (
+      original_size,
+      bit_length,
+      has_padding,
+      num_entries,
+      expected_hash,
+    ) = struct.unpack(HEADER_FORMAT, header_data)
 
-        original_size, has_padding, num_entries = struct.unpack(
-            ">QBH", header_data
-        )
+    expected_padding = original_size % 2
+    if has_padding not in (0, 1) or has_padding != expected_padding:
+      raise ValueError("La bandera de padding no coincide con el tamaño original.")
 
-        # 3. Leer Diccionario de Frecuencias
-        freq_map = {}
-        for _ in range(num_entries):
-            pair_bytes = in_file.read(2)
-            count_bytes = in_file.read(4)
-            if len(pair_bytes) < 2 or len(count_bytes) < 4:
-                print(
-                    "Error: Cabecera corrupta o incompleta al leer frecuencias."
-                )
-                sys.exit(1)
+    expected_pairs = (original_size + 1) // 2
+    if num_entries > 65536:
+      raise ValueError("La tabla contiene más pares de los permitidos.")
+    if (expected_pairs == 0) != (num_entries == 0):
+      raise ValueError("La cantidad de entradas no coincide con el tamaño original.")
 
-            b1, b2 = pair_bytes[0], pair_bytes[1]
-            (count,) = struct.unpack(">I", count_bytes)
-            freq_map[(b1, b2)] = count
+    freq_map = {}
+    for _ in range(num_entries):
+      byte_1, byte_2, count = struct.unpack(
+        ENTRY_FORMAT, _read_exact(in_file, ENTRY_SIZE, "tabla de frecuencias")
+      )
+      pair = (byte_1, byte_2)
+      if pair in freq_map or count == 0:
+        raise ValueError("La tabla contiene pares duplicados o frecuencia cero.")
+      freq_map[pair] = count
 
-        # 4. Reconstruir la Tabla de Códigos y Crear Diccionario Invertido (codigo -> par)
-        # Creamos una lista ficticia con las repeticiones para regenerar exactamente la misma tabla
-        pairs_reconstructed = []
-        for pair, count in freq_map.items():
-            pairs_reconstructed.extend([pair] * count)
+    if sum(freq_map.values()) != expected_pairs:
+      raise ValueError("Las frecuencias no suman la cantidad esperada de pares.")
 
-        codes, _ = generate_shannon_o2_codes(pairs_reconstructed)
-        reverse_codes = {code: pair for pair, code in codes.items()}
+    codes = generate_shannon_o2_codes_from_freq(freq_map)
+    reverse_codes = {code: pair for pair, code in codes.items()}
+    payload_offset = in_file.tell()
+    payload_size = (bit_length + 7) // 8
+    if compressed_size - payload_offset != payload_size:
+      raise ValueError("La longitud del payload no coincide con la cabecera.")
 
-        # 5. Decodificación Bit a Bit
-        reader = BitReader(in_file)
-        reconstructed_bytes = bytearray()
+    reader = BitReader(in_file)
+    reconstructed = bytearray()
+    current_code = ""
+    decoded_pairs = 0
+
+    for _ in range(bit_length):
+      bit = reader.read_bit()
+      if bit is None:
+        raise ValueError("Payload truncado durante la decodificación.")
+      current_code += bit
+
+      if current_code in reverse_codes:
+        if decoded_pairs >= expected_pairs:
+          raise ValueError("El payload contiene símbolos adicionales.")
+        reconstructed.extend(reverse_codes[current_code])
+        decoded_pairs += 1
         current_code = ""
 
-        # Leemos bits hasta recuperar exactamente los bytes del archivo original
-        while len(reconstructed_bytes) < original_size:
-            bit = reader.read_bit()
-            if bit is None:
-                # Llegamos al final inesperado del flujo
-                break
+    if current_code:
+      raise ValueError("El payload termina dentro de un código Shannon.")
+    if decoded_pairs != expected_pairs:
+      raise ValueError("El payload no reconstruye la cantidad esperada de pares.")
 
-            current_code += bit
+    unused_bits = payload_size * 8 - bit_length
+    if unused_bits:
+      in_file.seek(payload_offset + payload_size - 1)
+      last_byte = _read_exact(in_file, 1, "padding del payload")[0]
+      if last_byte & ((1 << unused_bits) - 1):
+        raise ValueError("Los bits de padding del payload no son cero.")
 
-            # Si la secuencia de bits coincide con un código de la tabla
-            if current_code in reverse_codes:
-                b1, b2 = reverse_codes[current_code]
-                reconstructed_bytes.append(b1)
+  if has_padding and reconstructed[-1] != 0:
+    raise ValueError("El byte de padding reconstruido no es cero.")
 
-                # Si aún no llegamos al límite original, agregamos el segundo byte
-                if len(reconstructed_bytes) < original_size:
-                    reconstructed_bytes.append(b2)
+  del reconstructed[original_size:]
+  actual_hash = hashlib.sha256(reconstructed).digest()
+  if actual_hash != expected_hash:
+    raise ValueError("SHA-256 no coincide: el archivo comprimido está corrupto.")
 
-                current_code = ""  # Reiniciar acumulador de bits
+  with open(output_path, "wb") as out_file:
+    out_file.write(reconstructed)
 
-    # 6. Guardar el archivo reconstruido
-    with open(output_path, "wb") as out_file:
-        out_file.write(reconstructed_bytes)
+  elapsed_time_ms = (time.perf_counter() - start_time) * 1000
+  reconstructed_size = len(reconstructed)
+  throughput = reconstructed_size / 1_000_000 / (elapsed_time_ms / 1000)
 
-    elapsed_time_ms = (time.time() - start_time) * 1000
-    reconstructed_size = len(reconstructed_bytes)
-
-    # 7. Salida en Pantalla con Métricas
+  if verbose:
     print("=" * 60)
-    print("            DESCOMPRESIÓN COMPLETADA (Shannon O(2))         ")
+    print("             DESCOMPRESIÓN COMPLETADA (Shannon O(2))       ")
     print("=" * 60)
     print(f"Archivo comprimido : {input_path}")
     print(f"Archivo reconstruido: {output_path}")
     print(f"Tamaño comprimido  : {compressed_size:,} bytes")
     print(f"Tamaño reconstruido: {reconstructed_size:,} bytes")
     print(f"Tiempo de ejecución: {elapsed_time_ms:.2f} ms")
-
-    if reconstructed_size == original_size:
-        print("Estado de integridad: OK (Tamaño coincide perfectamente)")
-    else:
-        print("Estado de integridad: ERROR (El tamaño no coincide)")
+    print(f"Throughput         : {throughput:.3f} MB/s")
+    print("Integridad         : SHA-256 coincide")
+    print(f"SHA-256            : {actual_hash.hex()}")
     print("=" * 60)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Uso: python decompressor.py <salida.tdi> <reconstruido.txt>")
-        sys.exit(1)
+  if len(sys.argv) != 3:
+    print("Uso: python decompressor.py <salida.tdi> <reconstruido.txt>")
+    sys.exit(1)
 
-    input_file = sys.argv[1]
-    output_file = sys.argv[2]
-    decompress(input_file, output_file)
+  try:
+    decompress(sys.argv[1], sys.argv[2])
+  except (OSError, ValueError, struct.error) as error:
+    print(f"Error: {error}", file=sys.stderr)
+    sys.exit(1)

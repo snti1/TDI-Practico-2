@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Reporte comparativo de compresores basado en benchmark_results.csv">
+  <title>Benchmark de compresión | TDI</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f4f6f2;
+      --surface: #ffffff;
+      --ink: #172522;
+      --muted: #66736e;
+      --line: #dce3de;
+      --soft: #e9efeb;
+      --own: #d6533f;
+      --seven: #087f73;
+      --gzip: #a27600;
+      --good: #176c50;
+      --bad: #b73a34;
+      --shadow: 0 18px 48px rgba(23, 37, 34, .07);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Aptos", "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    a { color: inherit; }
+    .page { width: min(1440px, calc(100% - 48px)); margin: 0 auto; }
+    .topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 20px 0 17px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-mark {
+      display: inline-grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border: 2px solid var(--ink);
+      border-radius: 50%;
+      color: var(--own);
+      font-family: Georgia, serif;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+    .source-link { text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    header { padding: 38px 0 26px; }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--own);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 800px;
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(36px, 4vw, 58px);
+      font-weight: 500;
+      line-height: 1.03;
+    }
+    .subtitle { max-width: 720px; margin: 14px 0 0; color: var(--muted); font-size: 15px; }
+    .scope {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 18px;
+      padding: 6px 10px;
+      border: 1px solid #c9d8d0;
+      border-radius: 3px;
+      background: #edf4ef;
+      color: #315c4a;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .scope::before { width: 7px; height: 7px; border-radius: 50%; background: var(--good); content: ""; }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 8px 0 26px;
+    }
+    .metric {
+      min-height: 124px;
+      padding: 18px 19px;
+      border: 1px solid var(--line);
+      border-top: 3px solid var(--accent, var(--ink));
+      background: var(--surface);
+      box-shadow: 0 4px 16px rgba(23, 37, 34, .025);
+    }
+    .metric-label { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .metric-value { display: block; margin: 8px 0 2px; font-family: Georgia, serif; font-size: 32px; line-height: 1.1; }
+    .metric-note { color: var(--muted); font-size: 12px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); gap: 16px; align-items: stretch; }
+    .panel { border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); }
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 19px 21px 15px;
+      border-bottom: 1px solid var(--line);
+    }
+    h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 23px; font-weight: 500; }
+    .panel-caption { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 0; margin: 2px 0 0; list-style: none; }
+    .legend li { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .swatch { width: 9px; height: 9px; background: var(--swatch); }
+    .chart-body { padding: 13px 21px 19px; }
+    .chart-row { display: grid; grid-template-columns: minmax(120px, 165px) 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px solid #edf0ed; }
+    .chart-row:last-child { border-bottom: 0; }
+    .case-name { font-size: 12px; font-weight: 800; }
+    .case-size { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; font-weight: 400; }
+    .bars { display: grid; gap: 7px; }
+    .bar-line { display: grid; grid-template-columns: minmax(70px, 125px) minmax(50px, 1fr) 57px; gap: 8px; align-items: center; }
+    .bar-name { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .track { height: 9px; overflow: hidden; background: #edf1ee; }
+    .bar { width: var(--width); height: 100%; min-width: 2px; background: var(--color); animation: grow .7s ease-out both; transform-origin: left; }
+    .bar-value { text-align: right; font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 800; }
+    @keyframes grow { from { width: 0; } to { width: var(--width); } }
+    .right-stack { display: grid; grid-template-rows: auto 1fr; gap: 16px; }
+    .ratio-list { padding: 7px 21px 17px; }
+    .ratio-item { padding: 12px 0; border-bottom: 1px solid #edf0ed; }
+    .ratio-item:last-child { border: 0; }
+    .ratio-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 7px; font-size: 12px; }
+    .ratio-alg { font-weight: 800; }
+    .ratio-number { font-family: Georgia, serif; font-size: 18px; }
+    .ratio-track { height: 6px; background: #edf1ee; }
+    .ratio-fill { height: 100%; width: var(--width); background: var(--color); }
+    .insight { padding: 20px 21px; border-left: 4px solid var(--own); background: #fff7f4; }
+    .insight-label { margin: 0 0 7px; color: var(--own); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .insight p { margin: 0; font-size: 13px; }
+    .insight strong { font-variant-numeric: tabular-nums; }
+    .table-panel { margin-top: 16px; }
+    .table-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; }
+    .filter {
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: white;
+      color: var(--muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .filter[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: white; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+    th, td { padding: 11px 13px; border-bottom: 1px solid #e9eeea; text-align: right; font-variant-numeric: tabular-nums; }
+    th { position: sticky; top: 0; background: #edf2ee; color: #46554f; font-size: 10px; letter-spacing: .035em; text-transform: uppercase; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+    tbody tr:hover { background: #f7faf7; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .algorithm-cell { display: flex; align-items: center; gap: 7px; font-weight: 700; }
+    .algo-dot { width: 8px; height: 8px; flex: 0 0 auto; background: var(--color); }
+    .negative { color: var(--bad); font-weight: 800; }
+    .positive { color: var(--good); }
+    .table-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    .method-note { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0 30px; }
+    .note { padding: 15px 17px; border: 1px solid var(--line); background: rgba(255,255,255,.58); color: var(--muted); font-size: 12px; }
+    .note strong { display: block; margin-bottom: 4px; color: var(--ink); }
+    footer { display: flex; justify-content: space-between; gap: 14px; padding: 16px 0 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .right-stack { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .page { width: min(100% - 28px, 1440px); }
+      .topline { align-items: flex-start; font-size: 9px; }
+      .topline > span:last-child { text-align: right; }
+      header { padding-top: 28px; }
+      .summary-grid { gap: 8px; }
+      .metric { min-height: 112px; padding: 14px; }
+      .metric-value { font-size: 27px; }
+      .right-stack, .method-note { grid-template-columns: 1fr; }
+      .chart-row { grid-template-columns: 1fr; gap: 9px; }
+      .bar-line { grid-template-columns: 90px minmax(36px, 1fr) 53px; }
+      .panel-head { padding: 16px; }
+      .chart-body { padding: 10px 16px 15px; }
+      footer { flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="topline">
+      <div class="brand"><span class="brand-mark">T</span><span>Teoría de la Información · 2026</span></div>
+      <span>Reporte generado desde <a class="source-link" href="benchmark_results.csv">benchmark_results.csv</a></span>
+    </div>
+
+    <header>
+      <p class="eyebrow">Práctico de máquina 2 / comparativa</p>
+      <h1>Benchmark de compresión</h1>
+      <p class="subtitle">Tres implementaciones, cuatro perfiles de datos y una comparación de tamaño, velocidad e integridad.</p>
+      <span class="scope">Weissman global calculado sobre pruebas 2–4</span>
+    </header>
+
+    <section class="summary-grid" aria-label="Resumen global del corpus de rendimiento">
+      <article class="metric" style="--accent: var(--seven)">
+        <span class="metric-label">Mejor ratio global</span>
+        <strong class="metric-value" id="best-ratio">3,501×</strong>
+        <span class="metric-note">7-Zip LZMA2 · pruebas 2–4</span>
+      </article>
+      <article class="metric" style="--accent: var(--gzip)">
+        <span class="metric-label">Mejor Weissman</span>
+        <strong class="metric-value">1,000</strong>
+        <span class="metric-note">gzip -6 · referencia</span>
+      </article>
+      <article class="metric" style="--accent: var(--own)">
+        <span class="metric-label">Mayor ahorro agregado</span>
+        <strong class="metric-value">71,38%</strong>
+        <span class="metric-note">7-Zip LZMA2 · 307.200 bytes</span>
+      </article>
+      <article class="metric" style="--accent: #526b61">
+        <span class="metric-label">Mediciones</span>
+        <strong class="metric-value">12</strong>
+        <span class="metric-note">4 archivos · 3 algoritmos</span>
+      </article>
+    </section>
+
+    <main>
+      <section class="layout" aria-label="Comparación resumida">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Ratio por tipo de archivo</h2>
+              <p class="panel-caption">Cada barra se escala respecto al mejor ratio de su prueba.</p>
+            </div>
+            <ul class="legend" aria-label="Algoritmos">
+              <li><span class="swatch" style="--swatch:var(--own)"></span>Shannon</li>
+              <li><span class="swatch" style="--swatch:var(--seven)"></span>7-Zip</li>
+              <li><span class="swatch" style="--swatch:var(--gzip)"></span>gzip</li>
+            </ul>
+          </div>
+          <div class="chart-body" id="ratio-chart"></div>
+        </article>
+
+        <div class="right-stack">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Tamaño agregado</h2>
+                <p class="panel-caption">Suma comprimida en las pruebas de rendimiento.</p>
+              </div>
+            </div>
+            <div class="ratio-list" id="size-chart"></div>
+          </article>
+          <aside class="insight">
+            <p class="insight-label">Lectura del resultado</p>
+            <p>En baja repetición, Shannon genera <strong>176.820 bytes</strong> desde 102.400: el contenedor crece <strong>72,68%</strong>. La tabla de pares domina el costo; gzip y 7-Zip quedan cerca de 85 KiB.</p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="panel table-panel">
+        <div class="panel-head">
+          <div class="table-tools">
+            <div>
+              <h2>Resultados por archivo</h2>
+              <p class="panel-caption">Tiempos y throughputs son medianas de tres ejecuciones.</p>
+            </div>
+            <div class="filters" role="group" aria-label="Filtrar algoritmo">
+              <button class="filter" type="button" data-filter="all" aria-pressed="true">Todos</button>
+              <button class="filter" type="button" data-filter="Shannon O(2) (Propio)" aria-pressed="false">Shannon</button>
+              <button class="filter" type="button" data-filter="7-Zip LZMA2 (Externo)" aria-pressed="false">7-Zip</button>
+              <button class="filter" type="button" data-filter="gzip -6 (Baseline)" aria-pressed="false">gzip -6</button>
+            </div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Archivo</th><th>Algoritmo</th><th>Original</th><th>Comprimido</th>
+                <th>Ratio</th><th>Ahorro</th><th>Comp. ms</th><th>MB/s comp.</th>
+                <th>Descomp. ms</th><th>MB/s desc.</th><th>Cabecera</th><th>Overhead</th><th>Weissman</th>
+              </tr>
+            </thead>
+            <tbody id="results-body"></tbody>
+          </table>
+        </div>
+        <div class="table-foot">
+          <span id="row-count">12 filas</span>
+          <span>“N/A” indica que la métrica no aplica al formato.</span>
+        </div>
+      </section>
+
+      <section class="method-note" aria-label="Metodología y alcance">
+        <div class="note">
+          <strong>Metodología</strong>
+          Weissman usa ratios globales y medianas del tiempo total del corpus, con gzip-6 como referencia. La prueba pequeña se excluye del score. Ratio superior a 1 indica reducción; inferior a 1, expansión.
+        </div>
+        <div class="note">
+          <strong>Alcance del corpus</strong>
+          Las pruebas 2–4 incluidas tienen 100 KiB cada una. La guía recomienda al menos 1 MiB para el ranking temporal; estos valores describen el CSV disponible y no reemplazan los bytes oficiales de la cátedra.
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>Solución propia: Shannon Ext. O(2), pares de bytes no solapados.</span>
+      <span>Fuente de datos: benchmark_results.csv · unidad temporal: ms</span>
+    </footer>
+  </div>
+
+  <script>
+    const rows = [
+      { file: "prueba_1_pequena.txt", algorithm: "Shannon O(2) (Propio)", original: 64, compressed: 275, ratio: 0.232727, saving: -329.6875, relative: 429.6875, compMs: 0.4982, compThroughput: 0.128462, decompMs: 0.715, decompThroughput: 0.08951, header: 257, overhead: 93.4545, weissman: 0.128064 },
+      { file: "prueba_1_pequena.txt", algorithm: "7-Zip LZMA2 (Externo)", original: 64, compressed: 195, ratio: 0.328205, saving: -204.6875, relative: 304.6875, compMs: 17.2107, compThroughput: 0.003719, decompMs: 16.1369, decompThroughput: 0.003966, header: null, overhead: null, weissman: 0.502327 },
+      { file: "prueba_1_pequena.txt", algorithm: "gzip -6 (Baseline)", original: 64, compressed: 59, ratio: 1.084746, saving: 7.8125, relative: 92.1875, compMs: 1.1113, compThroughput: 0.05759, decompMs: 0.5073, decompThroughput: 0.126158, header: null, overhead: null, weissman: 1.0 },
+      { file: "prueba_2_texto_natural.txt", algorithm: "Shannon O(2) (Propio)", original: 102400, compressed: 53414, ratio: 1.9171, saving: 47.8379, relative: 52.1621, compMs: 62.8731, compThroughput: 1.628677, decompMs: 108.61, decompThroughput: 0.942823, header: 3117, overhead: 5.8355, weissman: 0.128064 },
+      { file: "prueba_2_texto_natural.txt", algorithm: "7-Zip LZMA2 (Externo)", original: 102400, compressed: 1424, ratio: 71.910112, saving: 98.6094, relative: 1.3906, compMs: 19.9327, compThroughput: 5.137287, decompMs: 17.0865, decompThroughput: 5.993035, header: null, overhead: null, weissman: 0.502327 },
+      { file: "prueba_2_texto_natural.txt", algorithm: "gzip -6 (Baseline)", original: 102400, compressed: 1919, ratio: 53.361126, saving: 98.126, relative: 1.874, compMs: 1.413, compThroughput: 72.469922, decompMs: 0.8975, decompThroughput: 114.094708, header: null, overhead: null, weissman: 1.0 },
+      { file: "prueba_3_alta_repeticion.txt", algorithm: "Shannon O(2) (Propio)", original: 102400, compressed: 30107, ratio: 3.401202, saving: 70.5986, relative: 29.4014, compMs: 43.5011, compThroughput: 2.353963, decompMs: 85.6396, decompThroughput: 1.195709, header: 357, overhead: 1.1858, weissman: 0.128064 },
+      { file: "prueba_3_alta_repeticion.txt", algorithm: "7-Zip LZMA2 (Externo)", original: 102400, compressed: 305, ratio: 335.737705, saving: 99.7021, relative: 0.2979, compMs: 20.9762, compThroughput: 4.881723, decompMs: 19.4232, decompThroughput: 5.272046, header: null, overhead: null, weissman: 0.502327 },
+      { file: "prueba_3_alta_repeticion.txt", algorithm: "gzip -6 (Baseline)", original: 102400, compressed: 914, ratio: 112.035011, saving: 99.1074, relative: 0.8926, compMs: 2.3046, compThroughput: 44.432873, decompMs: 0.7466, decompThroughput: 137.155103, header: null, overhead: null, weissman: 1.0 },
+      { file: "prueba_4_baja_repeticion.txt", algorithm: "Shannon O(2) (Propio)", original: 102400, compressed: 176820, ratio: 0.57912, saving: -72.6758, relative: 172.6758, compMs: 152.5321, compThroughput: 0.671334, decompMs: 220.0892, decompThroughput: 0.465266, header: 89997, overhead: 50.8975, weissman: 0.128064 },
+      { file: "prueba_4_baja_repeticion.txt", algorithm: "7-Zip LZMA2 (Externo)", original: 102400, compressed: 86028, ratio: 1.19031, saving: 15.9883, relative: 84.0117, compMs: 27.9381, compThroughput: 3.665246, decompMs: 18.3073, decompThroughput: 5.593397, header: null, overhead: null, weissman: 0.502327 },
+      { file: "prueba_4_baja_repeticion.txt", algorithm: "gzip -6 (Baseline)", original: 102400, compressed: 85234, ratio: 1.201399, saving: 16.7637, relative: 83.2363, compMs: 4.3826, compThroughput: 23.365126, decompMs: 0.9138, decompThroughput: 112.059531, header: null, overhead: null, weissman: 1.0 }
+    ];
+
+    const algorithms = [
+      { name: "Shannon O(2) (Propio)", short: "Shannon", color: "var(--own)" },
+      { name: "7-Zip LZMA2 (Externo)", short: "7-Zip LZMA2", color: "var(--seven)" },
+      { name: "gzip -6 (Baseline)", short: "gzip -6", color: "var(--gzip)" }
+    ];
+    const format = (value, digits = 2) => new Intl.NumberFormat("es-AR", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+    const integer = value => new Intl.NumberFormat("es-AR").format(value);
+    const algorithmInfo = name => algorithms.find(item => item.name === name);
+    const performanceRows = rows.filter(row => row.original >= 1024);
+
+    function renderRatioChart() {
+      const tests = [...new Set(rows.map(row => row.file))];
+      document.getElementById("ratio-chart").innerHTML = tests.map(file => {
+        const testRows = rows.filter(row => row.file === file);
+        const best = Math.max(...testRows.map(row => row.ratio));
+        const size = testRows[0].original;
+        const label = file.replace("prueba_", "").replace(".txt", "").replaceAll("_", " ");
+        return `<div class="chart-row">
+          <div class="case-name">${label}<span class="case-size">${integer(size)} bytes originales</span></div>
+          <div class="bars">${testRows.map(row => {
+            const info = algorithmInfo(row.algorithm);
+            const width = Math.max(1, row.ratio / best * 100);
+            return `<div class="bar-line"><span class="bar-name">${info.short}</span><div class="track"><div class="bar" style="--width:${width}%;--color:${info.color}"></div></div><span class="bar-value">${format(row.ratio, 2)}×</span></div>`;
+          }).join("")}</div>
+        </div>`;
+      }).join("");
+    }
+
+    function renderSizeChart() {
+      const totals = algorithms.map(info => ({
+        ...info,
+        bytes: performanceRows.filter(row => row.algorithm === info.name).reduce((sum, row) => sum + row.compressed, 0)
+      }));
+      const max = Math.max(...totals.map(item => item.bytes));
+      document.getElementById("size-chart").innerHTML = totals.map(item => {
+        const saving = (1 - item.bytes / 307200) * 100;
+        return `<div class="ratio-item"><div class="ratio-top"><span class="ratio-alg">${item.short}</span><span><span class="ratio-number">${integer(item.bytes)}</span> bytes</span></div><div class="ratio-track"><div class="ratio-fill" style="--width:${item.bytes / max * 100}%;--color:${item.color}"></div></div><div class="metric-note">Ahorro agregado: ${format(saving)}% · ratio ${format(307200 / item.bytes, 3)}×</div></div>`;
+      }).join("");
+    }
+
+    function renderTable(filter = "all") {
+      const visible = rows.filter(row => filter === "all" || row.algorithm === filter);
+      document.getElementById("results-body").innerHTML = visible.map(row => {
+        const info = algorithmInfo(row.algorithm);
+        const savingClass = row.saving < 0 ? "negative" : "positive";
+        return `<tr>
+          <td>${row.file}</td>
+          <td><span class="algorithm-cell"><span class="algo-dot" style="--color:${info.color}"></span>${row.algorithm}</span></td>
+          <td>${integer(row.original)}</td><td>${integer(row.compressed)}</td>
+          <td>${format(row.ratio, 3)}×</td><td class="${savingClass}">${format(row.saving)}%</td>
+          <td>${format(row.compMs, 4)}</td><td>${format(row.compThroughput, 3)}</td>
+          <td>${format(row.decompMs, 4)}</td><td>${format(row.decompThroughput, 3)}</td>
+          <td>${row.header === null ? "N/A" : integer(row.header)}</td>
+          <td>${row.overhead === null ? "N/A" : `${format(row.overhead, 2)}%`}</td>
+          <td>${format(row.weissman, 3)}</td>
+        </tr>`;
+      }).join("");
+      document.getElementById("row-count").textContent = `${visible.length} filas visibles de ${rows.length}`;
+    }
+
+    document.querySelectorAll(".filter").forEach(button => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".filter").forEach(item => item.setAttribute("aria-pressed", "false"));
+        button.setAttribute("aria-pressed", "true");
+        renderTable(button.dataset.filter);
+      });
+    });
+
+    renderRatioChart();
+    renderSizeChart();
+    renderTable();
+  </script>
+</body>
+</html>
