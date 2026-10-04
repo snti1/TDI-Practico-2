@@ -28,14 +28,14 @@
       "gzip -6 (Baseline)": 3.4882532617211894
     },
     "mediana_tiempo_total_compresion_ms": {
-      "Shannon O(2) (Propio)": 258.711399997992,
-      "7-Zip LZMA2 (Externo)": 66.81060000119032,
-      "gzip -6 (Baseline)": 8.192999997845618
+      "Shannon O(2) (Propio)": 256.4234999954351,
+      "7-Zip LZMA2 (Externo)": 61.23939999815775,
+      "gzip -6 (Baseline)": 6.615600010263734
     },
     "weissman_global": {
       "gzip -6 (Baseline)": 1.0,
-      "Shannon O(2) (Propio)": 0.1280642581733332,
-      "7-Zip LZMA2 (Externo)": 0.5023273146117301
+      "Shannon O(2) (Propio)": 0.11522764070451844,
+      "7-Zip LZMA2 (Externo)": 0.4608022573194377
     }
   }
 }
