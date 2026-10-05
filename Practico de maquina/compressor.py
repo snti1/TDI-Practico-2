@@ -34,8 +34,8 @@ def compress(input_path: str, output_path: str, verbose: bool = True):
   pairs, has_padding = get_pairs_and_padding(original_data)
   codes, freq_map = generate_shannon_o2_codes(pairs)
 
-  if len(freq_map) > 65536:
-    raise ValueError("La tabla supera el alfabeto de pares de bytes.")
+  #if len(freq_map) > 65536:
+  #  raise ValueError("La tabla supera el alfabeto de pares de bytes.")
 
   # escribimos el header del archivo.
   # primero escribimos los magic bytes

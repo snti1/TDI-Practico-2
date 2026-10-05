@@ -2,7 +2,7 @@ import math
 from collections import Counter
 
 MAGIC = b"TDI2"
-HEADER_FORMAT = ">QQBII"
+HEADER_FORMAT = ">QQBI32s"
 ENTRY_FORMAT = ">BBQ"
 
 def get_pairs_and_padding(data: bytes):
