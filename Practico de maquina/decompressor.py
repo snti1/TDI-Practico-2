@@ -1,3 +1,4 @@
+import hashlib
 import zlib
 import os
 import struct
@@ -111,9 +112,9 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
     raise ValueError("El byte de padding reconstruido no es cero.")
 
   del reconstructed[original_size:]
-  actual_hash = zlib.crc32(reconstructed)
+  actual_hash = hashlib.sha256(reconstructed).digest()
   if actual_hash != expected_hash:
-    raise ValueError("CRC32 no coincide: el archivo comprimido está corrupto.")
+    raise ValueError("SHA256 no coincide: el archivo comprimido está corrupto.")
 
   with open(output_path, "wb") as out_file:
     out_file.write(reconstructed)
@@ -132,8 +133,8 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
     print(f"Tamaño reconstruido: {reconstructed_size:,} bytes")
     print(f"Tiempo de ejecución: {elapsed_time_ms:.2f} ms")
     print(f"Throughput         : {throughput:.3f} MB/s")
-    print("Integridad         : CRC32 coincide")
-    print(f"CRC32            : {actual_hash.hex()}")
+    print("Integridad         : SHA256 coincide")
+    print(f"SHA256            : {actual_hash.hex()}")
     print("=" * 60)
 
 

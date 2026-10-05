@@ -1,4 +1,4 @@
-import zlib
+import hashlib
 import os
 import struct
 import sys
@@ -26,8 +26,8 @@ def compress(input_path: str, output_path: str, verbose: bool = True):
     original_data = input_file.read()
 
   original_size = len(original_data)
-  hash = zlib.crc32(original_data)
-
+  hash = hashlib.sha256(original_data).digest()
+  
   # aplicamos shannon con extension de orden 2,
   # obtenemos los codigos y las frecuencias de 
   # los simbolos ...
