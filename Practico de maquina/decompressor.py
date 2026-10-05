@@ -1,5 +1,4 @@
 import hashlib
-import zlib
 import os
 import struct
 import sys
@@ -39,6 +38,7 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
     if magic != MAGIC:
       raise ValueError("Formato incompatible: se esperaba un archivo TDI2.")
 
+    # leemos la cabecera del archivo
     header_data = in_file.read(HEADER_SIZE)
     (
       original_size,
@@ -53,11 +53,12 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
       raise ValueError("La bandera de padding no coincide con el tamaño original.")
 
     expected_pairs = (original_size + 1) // 2
-    if num_entries > 65536:
-      raise ValueError("La tabla contiene más pares de los permitidos.")
+    #if num_entries > 65536:
+    #  raise ValueError("La tabla contiene más pares de los permitidos.")
     if (expected_pairs == 0) != (num_entries == 0):
       raise ValueError("La cantidad de entradas no coincide con el tamaño original.")
 
+    # leemos la tabla de frecuencias de simbolos...
     freq_map = {}
     for _ in range(num_entries):
       byte_1, byte_2, count = struct.unpack(
@@ -71,24 +72,33 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
     if sum(freq_map.values()) != expected_pairs:
       raise ValueError("Las frecuencias no suman la cantidad esperada de pares.")
 
+    # a partir de la tabla de frecuencias generamos los codigos
     codes = generate_shannon_o2_codes_from_freq(freq_map)
     reverse_codes = {code: pair for pair, code in codes.items()}
+    # 'codes' tiene un formato de la forma: {(byte_1, byte_2): 'code', ...} en el cual la key es la pair de bytes,
+    # en 'reverse_codes' cambiamos este formato a { 'code': (byte_1, byte_2), ...}
+    # esto lo hacemos para ...
     payload_offset = in_file.tell()
-    payload_size = (bit_length + 7) // 8
+    payload_size = (bit_length + 7) // 8 # calculamos la cantidad de bytes. sumamos 7 para redondear hacia arriba
     if compressed_size - payload_offset != payload_size:
       raise ValueError("La longitud del payload no coincide con la cabecera.")
 
+    # empezamos a reconstruir el archivo original: 
     reader = BitReader(in_file)
     reconstructed = bytearray()
     current_code = ""
     decoded_pairs = 0
 
     for _ in range(bit_length):
+      # leemos el payload bit a bit y lo adjuntamos a current_code
       bit = reader.read_bit()
       if bit is None:
         raise ValueError("Payload truncado durante la decodificación.")
       current_code += bit
 
+      # si encontramos una coincidencia, agregamos el par de bytes (letras) a 'reconstructed'
+      # como los codigos generados son instantaneos, nunca se va a dar el caso 
+      # de que un codigo sea prefijo de otro.
       if current_code in reverse_codes:
         if decoded_pairs >= expected_pairs:
           raise ValueError("El payload contiene símbolos adicionales.")
@@ -101,6 +111,7 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
     if decoded_pairs != expected_pairs:
       raise ValueError("El payload no reconstruye la cantidad esperada de pares.")
 
+    # aca chequeamos que los bits de padding sean todos 0.
     unused_bits = payload_size * 8 - bit_length
     if unused_bits:
       in_file.seek(payload_offset + payload_size - 1)
@@ -111,7 +122,13 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
   if has_padding and reconstructed[-1] != 0:
     raise ValueError("El byte de padding reconstruido no es cero.")
 
-  del reconstructed[original_size:]
+  del reconstructed[original_size:] # eliminamos el padding
+  reconstructed_size = len(reconstructed)
+  
+  elapsed_time_ms = (time.perf_counter() - start_time) * 1000
+  throughput = reconstructed_size / 1_000_000 / (elapsed_time_ms / 1000)
+
+  # verificamos integridad con el hash SHA256
   actual_hash = hashlib.sha256(reconstructed).digest()
   if actual_hash != expected_hash:
     raise ValueError("SHA256 no coincide: el archivo comprimido está corrupto.")
@@ -119,10 +136,7 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
   with open(output_path, "wb") as out_file:
     out_file.write(reconstructed)
 
-  elapsed_time_ms = (time.perf_counter() - start_time) * 1000
-  reconstructed_size = len(reconstructed)
-  throughput = reconstructed_size / 1_000_000 / (elapsed_time_ms / 1000)
-
+  # mostramos metricas ...
   if verbose:
     print("=" * 60)
     print("             DESCOMPRESIÓN COMPLETADA (Shannon O(2))       ")

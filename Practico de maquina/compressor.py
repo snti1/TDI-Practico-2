@@ -60,7 +60,7 @@ def compress(input_path: str, output_path: str, verbose: bool = True):
 
     header_size = output_file.tell()
 
-    # aca no se que escribimos ...
+    # aca escribimos los codigos de los simbolos
     writer = BitWriter(output_file)
     for pair in pairs:
       writer.write_bits(codes[pair])
