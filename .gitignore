@@ -3,6 +3,8 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+temp_benchmark/
+.vscode/
 # C extensions
 *.so
 

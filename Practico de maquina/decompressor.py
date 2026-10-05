@@ -1,15 +1,12 @@
-import hashlib
+import zlib
 import os
 import struct
 import sys
 import time
 
 from bit_stream import BitReader
-from shannon import generate_shannon_o2_codes_from_freq
+from shannon import generate_shannon_o2_codes_from_freq, ENTRY_FORMAT, HEADER_FORMAT, MAGIC
 
-MAGIC = b"TDI2"
-HEADER_FORMAT = ">QQBI32s"
-ENTRY_FORMAT = ">BBQ"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 ENTRY_SIZE = struct.calcsize(ENTRY_FORMAT)
 
@@ -114,9 +111,9 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
     raise ValueError("El byte de padding reconstruido no es cero.")
 
   del reconstructed[original_size:]
-  actual_hash = hashlib.sha256(reconstructed).digest()
+  actual_hash = zlib.crc32(reconstructed)
   if actual_hash != expected_hash:
-    raise ValueError("SHA-256 no coincide: el archivo comprimido está corrupto.")
+    raise ValueError("CRC32 no coincide: el archivo comprimido está corrupto.")
 
   with open(output_path, "wb") as out_file:
     out_file.write(reconstructed)
@@ -135,8 +132,8 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
     print(f"Tamaño reconstruido: {reconstructed_size:,} bytes")
     print(f"Tiempo de ejecución: {elapsed_time_ms:.2f} ms")
     print(f"Throughput         : {throughput:.3f} MB/s")
-    print("Integridad         : SHA-256 coincide")
-    print(f"SHA-256            : {actual_hash.hex()}")
+    print("Integridad         : CRC32 coincide")
+    print(f"CRC32            : {actual_hash.hex()}")
     print("=" * 60)
 
 

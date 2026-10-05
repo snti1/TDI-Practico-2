@@ -1,15 +1,11 @@
-import hashlib
+import zlib
 import os
 import struct
 import sys
 import time
 
 from bit_stream import BitWriter
-from shannon import generate_shannon_o2_codes, get_pairs_and_padding
-
-MAGIC = b"TDI2"
-HEADER_FORMAT = ">QQBI32s"
-ENTRY_FORMAT = ">BBQ"
+from shannon import generate_shannon_o2_codes, get_pairs_and_padding, ENTRY_FORMAT, HEADER_FORMAT, MAGIC
 
 
 def _same_path(first_path: str, second_path: str) -> bool:
@@ -30,7 +26,7 @@ def compress(input_path: str, output_path: str, verbose: bool = True):
     original_data = input_file.read()
 
   original_size = len(original_data)
-  original_hash = hashlib.sha256(original_data).digest()
+  hash = zlib.crc32(original_data)
 
   # aplicamos shannon con extension de orden 2,
   # obtenemos los codigos y las frecuencias de 
@@ -54,7 +50,7 @@ def compress(input_path: str, output_path: str, verbose: bool = True):
         bit_length,
         int(has_padding),
         len(freq_map),
-        original_hash, # dejar el hash aca o no??
+        hash,
       )
     )
 

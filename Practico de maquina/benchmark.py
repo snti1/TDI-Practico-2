@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 from contextlib import ExitStack
-from compressor import ENTRY_FORMAT, HEADER_FORMAT
+from shannon import ENTRY_FORMAT, HEADER_FORMAT, MAGIC
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_FILES = [
@@ -116,23 +116,33 @@ def _take_measurement(action, input_path, output_path):
   return samples
 
 
-def calculate_weissman(r_sol, r_ref, t_sol_ms, t_ref_ms, alpha=1.0):
-  if r_sol <= 0 or r_ref <= 0 or t_sol_ms <= 0 or t_ref_ms <= 0:
+def calculate_weissman(r_global, r_ref, t_global, t_ref, alpha=1.0):
+  """W = alpha . (r_global / r_ref) . [ log(t_ref) / log(t_global)]
+  \nW: Weissman Score de la solución evaluada.
+  \nalpha: Constante de escala. Para el práctico: alpha = 1.
+  \nr_global: Ratio de compresión de la solución evaluada.
+  \nr_ref: Ratio de gzip-6 sobre exactamente el mismo corpus.
+  \nt_global: Tiempo de compresión de la solución evaluada.
+  \nt_ref: Tiempo de compresión de gzip-6 en el mismo entorno
+  """
+  if r_global <= 0 or r_ref <= 0 or t_global <= 0 or t_ref <= 0:
     raise ValueError("Ratio y tiempos deben ser positivos para Weissman.")
-  if math.isclose(t_sol_ms, 1.0) or math.isclose(t_ref_ms, 1.0):
+  if math.isclose(t_global, 1.0) or math.isclose(t_ref, 1.0):
     return None
-  return alpha * (r_sol / r_ref) * (math.log(t_ref_ms) / math.log(t_sol_ms))
+  return alpha * (r_global / r_ref) * (math.log(t_ref) / math.log(t_global))
 
 
 def _tdi_header_size(archive_path):
-  header_size = struct.calcsize(HEADER_FORMAT)
-  with open(archive_path, "rb") as archive:
-    if archive.read(4) != b"TDI2":
-      raise ValueError("El compresor propio no generó un archivo TDI2.")
-    header = archive.read(header_size)
-  fields = struct.unpack(HEADER_FORMAT, header)
-  return 4 + header_size + fields[3] * struct.calcsize(ENTRY_FORMAT)
+    header_size = struct.calcsize(HEADER_FORMAT)
+    with open(archive_path, "rb") as archive:
+        archive.seek(len(MAGIC))          # saltear el magic
+        header = archive.read(header_size)
 
+    if len(header) < header_size:
+        raise ValueError("Archivo truncado: cabecera incompleta")
+
+    fields = struct.unpack(HEADER_FORMAT, header)
+    return len(MAGIC) + header_size + fields[3] * struct.calcsize(ENTRY_FORMAT)
 
 def _make_row(file_name, algorithm, input_path, archive_path, compress_samples, decompress_samples, header_size=None):
   original_size = os.path.getsize(input_path)
@@ -172,6 +182,7 @@ def run_benchmark():
   algorithms = _build_algorithms()
   rows = []
   original_sizes = {}
+  files = []
   compressed_sizes = {algorithm: {} for algorithm in ALGORITHMS}
   compression_samples = {algorithm: {} for algorithm in ALGORITHMS}
 
@@ -181,7 +192,13 @@ def run_benchmark():
       continue
 
     file_name = os.path.basename(input_path)
-    original_sizes[file_name] = os.path.getsize(input_path)
+    file_size = os.path.getsize(input_path)
+    original_sizes[file_name] = file_size
+
+    # solo contamos los archivos mayor a un determinado tamaño
+    # para calcular el weissman score: 
+    if file_size > SMALL_FILE_LIMIT: files.append(file_name)
+
     for algorithm in algorithms:
       name = algorithm["name"]
       archive_path = os.path.join(TEMP_DIR, file_name + algorithm["suffix"])
@@ -195,6 +212,7 @@ def run_benchmark():
 
       if not filecmp.cmp(input_path, decoded_path, shallow=False):
         raise ValueError(f"{name} no reconstruyó exactamente {file_name}.")
+      
       compression_samples[name][file_name] = compress_samples
       compressed_sizes[name][file_name] = os.path.getsize(archive_path)
       rows.append(
@@ -205,37 +223,26 @@ def run_benchmark():
           archive_path,
           compress_samples,
           decompress_samples,
-          algorithm["header_size"](archive_path)
-          if algorithm["header_size"]
-          else None,
+          algorithm["header_size"](archive_path) if algorithm["header_size"] else None,
         )
       )
     print(f"Mediciones completadas: {file_name} ({original_sizes[file_name]:,} bytes)")
 
-  performance_files = [
-    name for name, size in original_sizes.items() if size >= SMALL_FILE_LIMIT
-  ]
-  global_summary = {}
-  if performance_files:
-    total_original = sum(original_sizes[name] for name in performance_files)
-    global_ratios = {
-      algorithm: total_original
-      / sum(compressed_sizes[algorithm][name] for name in performance_files)
-      for algorithm in ALGORITHMS
+  if files:
+    total_original = sum(original_sizes[name] for name in files)
+    global_ratios = { # Rglobal
+      algorithm: total_original / sum(compressed_sizes[algorithm][name] for name in files) for algorithm in ALGORITHMS
     }
-    global_times = {
+    global_times = { # Tglobal
       algorithm: statistics.median(
-        sum(
-          compression_samples[algorithm][name][repeat]
-          for name in performance_files
-        )
-        for repeat in range(REPEAT_COUNT)
+        sum(compression_samples[algorithm][name][repeat] for name in files) for repeat in range(REPEAT_COUNT)
       )
       for algorithm in ALGORITHMS
     }
-    reference_ratio = global_ratios[ALGORITHMS[2]]
-    reference_time = global_times[ALGORITHMS[2]]
-    scores = {ALGORITHMS[2]: 1.0}
+    # ALGORITHMS[2] es gzip.
+    reference_ratio = global_ratios[ALGORITHMS[2]] # Rref
+    reference_time = global_times[ALGORITHMS[2]]   # Tref
+    scores = {ALGORITHMS[2]: 1.0} # baseline
     for algorithm in ALGORITHMS[:2]:
       scores[algorithm] = calculate_weissman(
         global_ratios[algorithm],
@@ -244,29 +251,21 @@ def run_benchmark():
         reference_time,
       )
     for row in rows:
+      # agregamos el weissman score a todos los algoritmos.
+      # como estamos calculando el global, este se va a repetir,
+      # pero es la unica forma de guardarlo en el mismo archivo ...
       score = scores[row["Algoritmo"]]
       row["Weissman_Global"] = round(score, 6) if score is not None else "N/A"
 
-    global_summary = {
-      "archivos_incluidos": performance_files,
-      "tamano_original_total_bytes": total_original,
-      "ratio_global": global_ratios,
-      "mediana_tiempo_total_compresion_ms": global_times,
-      "weissman_global": scores,
-    }
-
   csv_path = os.path.join(RESULTS_DIR, "benchmark_results.csv")
   if rows:
+    # finalmente escribimos el archivo .csv con todos los datos...
     with open(csv_path, "w", newline="", encoding="utf-8") as result_file:
       writer = csv.DictWriter(result_file, fieldnames=rows[0].keys())
       writer.writeheader()
       writer.writerows(rows)
-
+  
   print(f"Resultados por archivo: {csv_path}")
-  print("Weissman global (sin la prueba pequeña):")
-  for algorithm, score in global_summary.get("weissman_global", {}).items():
-    display = f"{score:.6f}" if score is not None else "N/A (log(1 ms))"
-    print(f"  {algorithm}: {display}")
 
 if __name__ == "__main__":
   try:
