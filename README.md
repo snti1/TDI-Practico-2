@@ -15,51 +15,42 @@ Las pruebas se realizan utilizando los mismos archivos de texto para los tres co
 
 Este repositorio reúne las resoluciones teóricas, desarrollos prácticos y la implementación del software de compresión desarrollado para la materia. El contenido está estructurado en 2 bloques principales:  
     
-TDI-Practico-2/ 
-├── Practico de maquina/ 
-│ 
-    ├── results/ # Salidas del benchmark (html, csv, json) 
-        ├── benchmark_report.html # Reporte visual/interactivo de resultados en HTML 
-        │ 
-        ├── benchmark_results.csv # Tabla completa de mediciones (tiempos en ms, ratios y Weissman) 
-        │ 
-        └── benchmark_summary.json # Resumen métrico estructurado para integración
-    │ 
-    ├── tests/ # Corpus de prueba (archivos .txt y documentación) 
-        ├── prueba_1_pequena.txt # Corpus 1: Archivo reducido para control de bordes 
-        │ 
-        ├── prueba_2_texto_natural.txt # Corpus 2: Texto plano con distribución natural 
-        │ 
-        ├── prueba_3_alta_repeticion.txt # Corpus 3: Secuencia redundante (baja entropía) 
-        │ 
-        ├── prueba_4_baja_repeticion.txt # Corpus 4: Secuencia compleja (alta entropía) 
-        │ 
-        └── README_pruebas.txt # Descripción del origen y propósito de los datasets
-    │ 
-    ├── 7z.exe # Solución externa de referencia 
-    │ 
-    ├── benchmark.py # Automatización de pruebas y métricas 
-    │ 
-    ├── bit_stream.py # Manipulación de flujos de bits (BitWriter / BitReader) 
-    │ 
-    ├── compressor.py # Compresor de Shannon + Markov de orden 2 (.tdi) 
-    │ 
-    ├── decompressor.py # Descompresor y reconstrucción de contexto 
-    │ 
-    ├── README.md # Guía específica de ejecución y comandos 
-    │ 
-    ├── shannon.py # Algoritmo de Shannon y cálculo de frecuencias 
-    │ 
-    └── test_codec.py # Suite de testing de integridad SHA-256 
-├── Practicos_Teoricos/ 
-    │ 
-    ├── practico_3_Markov # Resoluciones teóricas del Práctico 3 (Fuentes de Markov) 
-    │ 
-    └── practico_4 # Resoluciones teóricas del Práctico 4 (Extensión de fuentes) 
-├── .gitignore # Exclusiones de Git (temporales, binarios, .tdi) 
-└── README.md # Documentación general y principal del repositorio
-
-
+```
+    TDI-Practico-2/ 
+    ├── Practico de maquina/ 
+    │   │ 
+    │   ├── results/ # Salidas del benchmark (html, csv, json) 
+    │   │   ├── benchmark_report.html # Reporte visual/interactivo de resultados en HTML 
+    │   │   └── benchmark_results.csv # Tabla completa de mediciones (tiempos en ms, ratios y Weissman) 
+    │   │ 
+    │   ├── tests/ # Corpus de prueba (archivos .txt y documentación) 
+    │   │   ├── prueba_1_pequena.txt # Corpus 1: Archivo reducido para control de bordes 
+    │   │   ├── prueba_2_texto_natural.txt # Corpus 2: Texto plano con distribución natural 
+    │   │   ├── prueba_3_alta_repeticion.txt # Corpus 3: Secuencia redundante (baja entropía) 
+    │   │   ├── prueba_4_baja_repeticion.txt # Corpus 4: Secuencia compleja (alta entropía) 
+    │   │   └── README_pruebas.txt # Descripción del origen y propósito de los datasets
+    │   │ 
+    │   ├── benchmark.py # Automatización de pruebas y métricas 
+    │   │
+    │   ├── bit_stream.py # Manipulación de flujos de bits (BitWriter / BitReader) 
+    │   │ 
+    │   ├── compressor.py # Compresor de Shannon + Markov de orden 2 (.tdi) 
+    │   │ 
+    │   ├── decompressor.py # Descompresor y reconstrucción de contexto 
+    │   │ 
+    │   ├── README.md # Guía específica de ejecución y comandos 
+    │   │ 
+    │   └── shannon.py # Algoritmo de Shannon y cálculo de frecuencias 
+    │   
+    ├── Practicos_Teoricos/ 
+    │   │ 
+    │   ├── practico_3_Markov # Resoluciones teóricas del Práctico 3 (Fuentes de Markov) 
+    │   │ 
+    │   └── practico_4 # Resoluciones teóricas del Práctico 4 (Extensión de fuentes) 
+    │
+    ├── .gitignore # Exclusiones de Git (temporales, binarios, .tdi) 
+    └── README.md # Documentación general y principal del repositorio
+```
 
 
 # Informacion sobre los compresores 7zip(default) y gzip(nivel 6)
@@ -89,7 +80,7 @@ Para verificar la instalación:
 7z
 ```
 
-También puede utilizarse la versión de 7-Zip instalada directamente en Windows, pero para este proyecto las pruebas se realizan dentro de WSL para mantener el entorno de ejecución uniforme.
+También puede utilizarse la versión de 7-Zip instalada directamente en Windows.
 
 ### 1.3 Uso
 
