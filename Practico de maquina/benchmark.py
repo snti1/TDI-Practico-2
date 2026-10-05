@@ -1,21 +1,15 @@
 import csv
 import filecmp
-import hashlib
-import gzip
-import json
 import math
 import os
-import platform
 import shutil
 import statistics
 import struct
 import subprocess
 import sys
 import time
-import zlib
-from compressor import ENTRY_FORMAT, HEADER_FORMAT, compress
-from decompressor import decompress
-
+from contextlib import ExitStack
+from compressor import ENTRY_FORMAT, HEADER_FORMAT
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_FILES = [
@@ -37,122 +31,89 @@ ALGORITHMS = (
   "gzip -6 (Baseline)",
 )
 
-
-def ensure_directories():
-  os.makedirs(RESULTS_DIR, exist_ok=True)
-  os.makedirs(TEMP_DIR, exist_ok=True)
-
-
-def _measure_repeated(operation):
-  samples = []
-  for _ in range(REPEAT_COUNT):
-    start = time.perf_counter()
-    operation()
-    samples.append((time.perf_counter() - start) * 1000)
-  return samples
-
-
-def _gzip_compress(input_path, output_path):
-  with open(input_path, "rb") as input_file, open(output_path, "wb") as raw_output:
-    with gzip.GzipFile(
-      filename="",
-      mode="wb",
-      fileobj=raw_output,
-      compresslevel=6,
-      mtime=0,
-    ) as gzip_output:
-      shutil.copyfileobj(input_file, gzip_output)
-
-
-def _get_7zip():
-  bundled = os.path.join(BASE_DIR, "7z.exe")
-  executable = bundled if os.path.isfile(bundled) else shutil.which("7z")
-  if not executable:
-    executable = shutil.which("7za")
-  if not executable:
-    raise FileNotFoundError("No se encontró 7-Zip (7z.exe, 7z o 7za).")
-  return executable
-
-
-def _run_7zip(arguments):
-  result = subprocess.run(arguments, capture_output=True, text=True)
-  if result.returncode != 0:
-    raise RuntimeError(f"Falló 7-Zip: {result.stderr or result.stdout}")
-
-
-def measure_shannon_o2(input_path):
-  output_path = os.path.join(
-    TEMP_DIR, os.path.basename(input_path) + ".shannon.tdi"
-  )
-  samples = _measure_repeated(
-    lambda: compress(input_path, output_path, verbose=False)
-  )
-  return output_path, samples
+def _build_algorithms():
+  python = sys.executable
+  return [
+    {
+      "name": ALGORITHMS[0],
+      "suffix": ".tdi",
+      "compress": {
+        "command": [python, os.path.join(BASE_DIR, "compressor.py"), "{input}", "{output}"],
+      },
+      "decompress": {
+        "command": [python, os.path.join(BASE_DIR, "decompressor.py"), "{input}", "{output}", "-q"],
+      },
+      "header_size": _tdi_header_size,
+    },
+    {
+      "name": ALGORITHMS[1],
+      "suffix": ".7z",
+      "compress": {
+        "command": ["7z", "a", "-t7z", "-m0=LZMA2", "-mx=5", "-bd", "-y", "{output}", "{input}"],
+      },
+      "decompress": {
+        "command": ["7z", "x", "-so", "-bd", "{input}"],
+        "stdout_to_output": True,
+      },
+      "header_size": None,
+    },
+    {
+      "name": ALGORITHMS[2],
+      "suffix": ".gz",
+      "compress": {
+        "command": ["gzip", "-n", "-6", "-c"],
+        "stdin_from_input": True,
+        "stdout_to_output": True,
+      },
+      "decompress": {
+        "command": ["gzip", "-d", "-c", "{input}"],
+        "stdout_to_output": True,
+      },
+      "header_size": None,
+    },
+  ]
 
 
-def measure_7zip(input_path):
-  output_path = os.path.join(TEMP_DIR, os.path.basename(input_path) + ".7z")
-  executable = _get_7zip()
+def _execute_command(action, input_path, output_path):
+  command = [
+    part.format(input=input_path, output=output_path)
+    for part in action["command"]
+  ]
 
-  def operation():
-    if os.path.exists(output_path):
-      os.remove(output_path)
-    _run_7zip(
-      [
-        executable,
-        "a",
-        "-t7z",
-        "-m0=LZMA2",
-        "-mx=5",
-        "-bd",
-        "-y",
-        output_path,
-        input_path,
-      ]
+  with ExitStack() as stack:
+    stdin = None
+    if action.get("stdin_from_input"):
+      stdin = stack.enter_context(open(input_path, "rb"))
+
+    if action.get("stdout_to_output"):
+      stdout = stack.enter_context(open(output_path, "wb"))
+    else:
+      stdout = subprocess.PIPE
+
+    result = subprocess.run(
+      command,
+      stdin=stdin,
+      stdout=stdout,
+      stderr=subprocess.PIPE,
+      text=True,
     )
 
-  samples = _measure_repeated(operation)
-  return output_path, samples
+  if result.returncode != 0:
+    details = result.stderr or result.stdout or "sin detalle del proceso"
+    raise RuntimeError(f"Comando fallido ({result.returncode}): {details.strip()}")
 
 
-def measure_gzip6(input_path):
-  output_path = os.path.join(TEMP_DIR, os.path.basename(input_path) + ".gz")
-  samples = _measure_repeated(lambda: _gzip_compress(input_path, output_path))
-  return output_path, samples
-
-
-def measure_shannon_decompression(archive_path, output_path):
-  samples = _measure_repeated(
-    lambda: decompress(archive_path, output_path, verbose=False)
-  )
+def _take_measurement(action, input_path, output_path):
+  samples = []
+  for _ in range(REPEAT_COUNT):
+    if os.path.exists(output_path):
+      os.remove(output_path)
+    start = time.perf_counter()
+    _execute_command(action, input_path, output_path)
+    samples.append((time.perf_counter() - start) * 1000)
+    if not os.path.isfile(output_path):
+      raise RuntimeError(f"El comando no generó la salida esperada: {output_path}")
   return samples
-
-
-def measure_gzip_decompression(archive_path, output_path):
-  def operation():
-    with gzip.open(archive_path, "rb") as gzip_input, open(
-      output_path, "wb"
-    ) as output_file:
-      shutil.copyfileobj(gzip_input, output_file)
-
-  return _measure_repeated(operation)
-
-
-def measure_7zip_decompression(archive_path, output_path):
-  executable = _get_7zip()
-
-  def operation():
-    with open(output_path, "wb") as output_file:
-      result = subprocess.run(
-        [executable, "x", "-so", "-bd", archive_path],
-        stdout=output_file,
-        stderr=subprocess.PIPE,
-        text=False,
-      )
-    if result.returncode != 0:
-      raise RuntimeError(f"Falló la extracción 7-Zip: {result.stderr!r}")
-
-  return _measure_repeated(operation)
 
 
 def calculate_weissman(r_sol, r_ref, t_sol_ms, t_ref_ms, alpha=1.0):
@@ -173,8 +134,7 @@ def _tdi_header_size(archive_path):
   return 4 + header_size + fields[3] * struct.calcsize(ENTRY_FORMAT)
 
 
-def _make_row(file_name, algorithm, input_path, archive_path, compress_samples,
-        decompress_samples, header_size=None):
+def _make_row(file_name, algorithm, input_path, archive_path, compress_samples, decompress_samples, header_size=None):
   original_size = os.path.getsize(input_path)
   compressed_size = os.path.getsize(archive_path)
   compression_ms = statistics.median(compress_samples)
@@ -209,8 +169,7 @@ def _make_row(file_name, algorithm, input_path, archive_path, compress_samples,
 
 
 def run_benchmark():
-  ensure_directories()
-  seven_zip = _get_7zip()
+  algorithms = _build_algorithms()
   rows = []
   original_sizes = {}
   compressed_sizes = {algorithm: {} for algorithm in ALGORITHMS}
@@ -223,65 +182,34 @@ def run_benchmark():
 
     file_name = os.path.basename(input_path)
     original_sizes[file_name] = os.path.getsize(input_path)
-    decoded_paths = {
-      algorithm: os.path.join(TEMP_DIR, file_name + "." + suffix + ".out")
-      for algorithm, suffix in (
-        (ALGORITHMS[0], "shannon"),
-        (ALGORITHMS[1], "7z"),
-        (ALGORITHMS[2], "gzip"),
+    for algorithm in algorithms:
+      name = algorithm["name"]
+      archive_path = os.path.join(TEMP_DIR, file_name + algorithm["suffix"])
+      decoded_path = os.path.join(TEMP_DIR, file_name + algorithm["suffix"] + ".out")
+      compress_samples = _take_measurement(
+        algorithm["compress"], input_path, archive_path
       )
-    }
+      decompress_samples = _take_measurement(
+        algorithm["decompress"], archive_path, decoded_path
+      )
 
-    shannon_path, shannon_times = measure_shannon_o2(input_path)
-    seven_zip_path, seven_zip_times = measure_7zip(input_path)
-    gzip_path, gzip_times = measure_gzip6(input_path)
-
-    shannon_decode_times = measure_shannon_decompression(
-      shannon_path, decoded_paths[ALGORITHMS[0]]
-    )
-    seven_zip_decode_times = measure_7zip_decompression(
-      seven_zip_path, decoded_paths[ALGORITHMS[1]]
-    )
-    gzip_decode_times = measure_gzip_decompression(
-      gzip_path, decoded_paths[ALGORITHMS[2]]
-    )
-
-    archive_paths = {
-      ALGORITHMS[0]: shannon_path,
-      ALGORITHMS[1]: seven_zip_path,
-      ALGORITHMS[2]: gzip_path,
-    }
-    sample_sets = {
-      ALGORITHMS[0]: (shannon_times, shannon_decode_times),
-      ALGORITHMS[1]: (seven_zip_times, seven_zip_decode_times),
-      ALGORITHMS[2]: (gzip_times, gzip_decode_times),
-    }
-
-    for algorithm in ALGORITHMS:
-      if not filecmp.cmp(
-        input_path, decoded_paths[algorithm], shallow=False
-      ):
-        raise ValueError(
-          f"{algorithm} no reconstruyó exactamente {file_name}."
-        )
-      archive_path = archive_paths[algorithm]
-      compress_samples, decompress_samples = sample_sets[algorithm]
-      compression_samples[algorithm][file_name] = compress_samples
-      compressed_sizes[algorithm][file_name] = os.path.getsize(archive_path)
+      if not filecmp.cmp(input_path, decoded_path, shallow=False):
+        raise ValueError(f"{name} no reconstruyó exactamente {file_name}.")
+      compression_samples[name][file_name] = compress_samples
+      compressed_sizes[name][file_name] = os.path.getsize(archive_path)
       rows.append(
         _make_row(
           file_name,
-          algorithm,
+          name,
           input_path,
           archive_path,
           compress_samples,
           decompress_samples,
-          _tdi_header_size(archive_path)
-          if algorithm == ALGORITHMS[0]
+          algorithm["header_size"](archive_path)
+          if algorithm["header_size"]
           else None,
         )
       )
-
     print(f"Mediciones completadas: {file_name} ({original_sizes[file_name]:,} bytes)")
 
   performance_files = [
@@ -318,6 +246,7 @@ def run_benchmark():
     for row in rows:
       score = scores[row["Algoritmo"]]
       row["Weissman_Global"] = round(score, 6) if score is not None else "N/A"
+
     global_summary = {
       "archivos_incluidos": performance_files,
       "tamano_original_total_bytes": total_original,
@@ -333,44 +262,17 @@ def run_benchmark():
       writer.writeheader()
       writer.writerows(rows)
 
-  metadata = {
-    "repeticiones": REPEAT_COUNT,
-    "unidad_tiempo": "ms",
-    "MB": "1,000,000 bytes",
-    "exclusion_temporal_archivo_menor_a_bytes": SMALL_FILE_LIMIT,
-    "baseline": "gzip -6, sin nombre ni timestamp (gzip Python, mtime=0)",
-    "solucion_externa": "7-Zip 7z/LZMA2 -mx=5 (Normal)",
-    "7zip_ejecutable": seven_zip,
-    "python": sys.version,
-    "plataforma": platform.platform(),
-    "zlib": zlib.ZLIB_VERSION,
-    "sha256_entradas": {
-      os.path.basename(path): _sha256_file(path)
-      for path in TEST_FILES
-      if os.path.isfile(path)
-    },
-    "resumen_global": global_summary,
-  }
-  with open(os.path.join(RESULTS_DIR, "benchmark_summary.json"), "w", encoding="utf-8") as summary_file:
-    json.dump(metadata, summary_file, indent=2, ensure_ascii=True)
-
   print(f"Resultados por archivo: {csv_path}")
   print("Weissman global (sin la prueba pequeña):")
   for algorithm, score in global_summary.get("weissman_global", {}).items():
     display = f"{score:.6f}" if score is not None else "N/A (log(1 ms))"
     print(f"  {algorithm}: {display}")
 
-
-def _sha256_file(path):
-  digest = hashlib.sha256()
-  with open(path, "rb") as input_file:
-    for chunk in iter(lambda: input_file.read(65536), b""):
-      digest.update(chunk)
-  return digest.hexdigest()
-
-
 if __name__ == "__main__":
   try:
+    for req in ("7z", "gzip"):
+      if not shutil.which(req):
+        sys.exit(f"Falta {req} en PATH.")
     run_benchmark()
   except (OSError, ValueError, RuntimeError, struct.error) as error:
     print(f"Error en benchmark: {error}", file=sys.stderr)

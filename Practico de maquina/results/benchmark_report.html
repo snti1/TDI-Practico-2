@@ -92,6 +92,33 @@
       font-weight: 700;
     }
     .scope::before { width: 7px; height: 7px; border-radius: 50%; background: var(--good); content: ""; }
+    .load-status {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 18px;
+      padding: 11px 14px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .load-status[data-state="error"] { border-color: #e2b8b2; background: #fff7f4; color: #87372f; }
+    .load-actions { display: flex; gap: 8px; }
+    .load-actions button {
+      padding: 6px 9px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: white;
+      color: var(--ink);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    #csv-file { display: none; }
     .summary-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -215,30 +242,39 @@
     <header>
       <p class="eyebrow">Práctico de máquina 2 / comparativa</p>
       <h1>Benchmark de compresión</h1>
-      <p class="subtitle">Tres implementaciones, cuatro perfiles de datos y una comparación de tamaño, velocidad e integridad.</p>
-      <span class="scope">Weissman global calculado sobre pruebas 2–4</span>
+      <p class="subtitle">Comparación de tamaño, velocidad y rendimiento por archivo.</p>
+      <span class="scope" id="scope-label">Esperando datos del CSV</span>
     </header>
+
+    <div class="load-status" id="load-status" role="status" aria-live="polite">
+      <span id="load-message">Leyendo benchmark_results.csv...</span>
+      <div class="load-actions">
+        <button id="reload-csv" type="button">Volver a leer CSV</button>
+        <button id="choose-csv" type="button">Elegir archivo</button>
+        <input id="csv-file" type="file" accept=".csv,text/csv">
+      </div>
+    </div>
 
     <section class="summary-grid" aria-label="Resumen global del corpus de rendimiento">
       <article class="metric" style="--accent: var(--seven)">
         <span class="metric-label">Mejor ratio global</span>
-        <strong class="metric-value" id="best-ratio">3,501×</strong>
-        <span class="metric-note">7-Zip LZMA2 · pruebas 2–4</span>
+        <strong class="metric-value" id="best-ratio">N/A</strong>
+        <span class="metric-note" id="best-ratio-note">Esperando CSV</span>
       </article>
       <article class="metric" style="--accent: var(--gzip)">
         <span class="metric-label">Mejor Weissman</span>
-        <strong class="metric-value">1,000</strong>
-        <span class="metric-note">gzip -6 · referencia</span>
+        <strong class="metric-value" id="best-weissman">N/A</strong>
+        <span class="metric-note" id="best-weissman-note">Esperando CSV</span>
       </article>
       <article class="metric" style="--accent: var(--own)">
         <span class="metric-label">Mayor ahorro agregado</span>
-        <strong class="metric-value">71,38%</strong>
-        <span class="metric-note">7-Zip LZMA2 · 307.200 bytes</span>
+        <strong class="metric-value" id="best-saving">N/A</strong>
+        <span class="metric-note" id="best-saving-note">Esperando CSV</span>
       </article>
       <article class="metric" style="--accent: #526b61">
         <span class="metric-label">Mediciones</span>
-        <strong class="metric-value">12</strong>
-        <span class="metric-note">4 archivos · 3 algoritmos</span>
+        <strong class="metric-value" id="measurement-count">N/A</strong>
+        <span class="metric-note" id="measurement-note">Esperando CSV</span>
       </article>
     </section>
 
@@ -248,13 +284,9 @@
           <div class="panel-head">
             <div>
               <h2>Ratio por tipo de archivo</h2>
-              <p class="panel-caption">Cada barra se escala respecto al mejor ratio de su prueba.</p>
+              <p class="panel-caption">Cada barra se escala respecto al mejor ratio de ese archivo.</p>
             </div>
-            <ul class="legend" aria-label="Algoritmos">
-              <li><span class="swatch" style="--swatch:var(--own)"></span>Shannon</li>
-              <li><span class="swatch" style="--swatch:var(--seven)"></span>7-Zip</li>
-              <li><span class="swatch" style="--swatch:var(--gzip)"></span>gzip</li>
-            </ul>
+            <ul class="legend" id="chart-legend" aria-label="Algoritmos"></ul>
           </div>
           <div class="chart-body" id="ratio-chart"></div>
         </article>
@@ -269,9 +301,9 @@
             </div>
             <div class="ratio-list" id="size-chart"></div>
           </article>
-          <aside class="insight">
+          <aside class="insight" id="insight-panel">
             <p class="insight-label">Lectura del resultado</p>
-            <p>En baja repetición, Shannon genera <strong>176.820 bytes</strong> desde 102.400: el contenedor crece <strong>72,68%</strong>. La tabla de pares domina el costo; gzip y 7-Zip quedan cerca de 85 KiB.</p>
+            <p id="insight-copy">La observación se calculará desde las filas del CSV.</p>
           </aside>
         </div>
       </section>
@@ -281,7 +313,7 @@
           <div class="table-tools">
             <div>
               <h2>Resultados por archivo</h2>
-              <p class="panel-caption">Tiempos y throughputs son medianas de tres ejecuciones.</p>
+              <p class="panel-caption">Métricas cargadas directamente desde el CSV.</p>
             </div>
             <div class="filters" role="group" aria-label="Filtrar algoritmo">
               <button class="filter" type="button" data-filter="all" aria-pressed="true">Todos</button>
@@ -312,11 +344,11 @@
       <section class="method-note" aria-label="Metodología y alcance">
         <div class="note">
           <strong>Metodología</strong>
-          Weissman usa ratios globales y medianas del tiempo total del corpus, con gzip-6 como referencia. La prueba pequeña se excluye del score. Ratio superior a 1 indica reducción; inferior a 1, expansión.
+          El ratio se interpreta como tamaño original dividido por tamaño comprimido. Superior a 1 indica reducción; inferior a 1, expansión. El Weissman se muestra tal como está registrado en el CSV.
         </div>
         <div class="note">
-          <strong>Alcance del corpus</strong>
-          Las pruebas 2–4 incluidas tienen 100 KiB cada una. La guía recomienda al menos 1 MiB para el ranking temporal; estos valores describen el CSV disponible y no reemplazan los bytes oficiales de la cátedra.
+          <strong>Fuente y actualización</strong>
+          El HTML vuelve a solicitar el CSV al abrirse. Para lectura automática, abre esta página mediante un servidor HTTP local; los navegadores bloquean la lectura automática de archivos vecinos desde `file://`.
         </div>
       </section>
     </main>
@@ -328,30 +360,159 @@
   </div>
 
   <script>
-    const rows = [
-      { file: "prueba_1_pequena.txt", algorithm: "Shannon O(2) (Propio)", original: 64, compressed: 275, ratio: 0.232727, saving: -329.6875, relative: 429.6875, compMs: 0.4982, compThroughput: 0.128462, decompMs: 0.715, decompThroughput: 0.08951, header: 257, overhead: 93.4545, weissman: 0.128064 },
-      { file: "prueba_1_pequena.txt", algorithm: "7-Zip LZMA2 (Externo)", original: 64, compressed: 195, ratio: 0.328205, saving: -204.6875, relative: 304.6875, compMs: 17.2107, compThroughput: 0.003719, decompMs: 16.1369, decompThroughput: 0.003966, header: null, overhead: null, weissman: 0.502327 },
-      { file: "prueba_1_pequena.txt", algorithm: "gzip -6 (Baseline)", original: 64, compressed: 59, ratio: 1.084746, saving: 7.8125, relative: 92.1875, compMs: 1.1113, compThroughput: 0.05759, decompMs: 0.5073, decompThroughput: 0.126158, header: null, overhead: null, weissman: 1.0 },
-      { file: "prueba_2_texto_natural.txt", algorithm: "Shannon O(2) (Propio)", original: 102400, compressed: 53414, ratio: 1.9171, saving: 47.8379, relative: 52.1621, compMs: 62.8731, compThroughput: 1.628677, decompMs: 108.61, decompThroughput: 0.942823, header: 3117, overhead: 5.8355, weissman: 0.128064 },
-      { file: "prueba_2_texto_natural.txt", algorithm: "7-Zip LZMA2 (Externo)", original: 102400, compressed: 1424, ratio: 71.910112, saving: 98.6094, relative: 1.3906, compMs: 19.9327, compThroughput: 5.137287, decompMs: 17.0865, decompThroughput: 5.993035, header: null, overhead: null, weissman: 0.502327 },
-      { file: "prueba_2_texto_natural.txt", algorithm: "gzip -6 (Baseline)", original: 102400, compressed: 1919, ratio: 53.361126, saving: 98.126, relative: 1.874, compMs: 1.413, compThroughput: 72.469922, decompMs: 0.8975, decompThroughput: 114.094708, header: null, overhead: null, weissman: 1.0 },
-      { file: "prueba_3_alta_repeticion.txt", algorithm: "Shannon O(2) (Propio)", original: 102400, compressed: 30107, ratio: 3.401202, saving: 70.5986, relative: 29.4014, compMs: 43.5011, compThroughput: 2.353963, decompMs: 85.6396, decompThroughput: 1.195709, header: 357, overhead: 1.1858, weissman: 0.128064 },
-      { file: "prueba_3_alta_repeticion.txt", algorithm: "7-Zip LZMA2 (Externo)", original: 102400, compressed: 305, ratio: 335.737705, saving: 99.7021, relative: 0.2979, compMs: 20.9762, compThroughput: 4.881723, decompMs: 19.4232, decompThroughput: 5.272046, header: null, overhead: null, weissman: 0.502327 },
-      { file: "prueba_3_alta_repeticion.txt", algorithm: "gzip -6 (Baseline)", original: 102400, compressed: 914, ratio: 112.035011, saving: 99.1074, relative: 0.8926, compMs: 2.3046, compThroughput: 44.432873, decompMs: 0.7466, decompThroughput: 137.155103, header: null, overhead: null, weissman: 1.0 },
-      { file: "prueba_4_baja_repeticion.txt", algorithm: "Shannon O(2) (Propio)", original: 102400, compressed: 176820, ratio: 0.57912, saving: -72.6758, relative: 172.6758, compMs: 152.5321, compThroughput: 0.671334, decompMs: 220.0892, decompThroughput: 0.465266, header: 89997, overhead: 50.8975, weissman: 0.128064 },
-      { file: "prueba_4_baja_repeticion.txt", algorithm: "7-Zip LZMA2 (Externo)", original: 102400, compressed: 86028, ratio: 1.19031, saving: 15.9883, relative: 84.0117, compMs: 27.9381, compThroughput: 3.665246, decompMs: 18.3073, decompThroughput: 5.593397, header: null, overhead: null, weissman: 0.502327 },
-      { file: "prueba_4_baja_repeticion.txt", algorithm: "gzip -6 (Baseline)", original: 102400, compressed: 85234, ratio: 1.201399, saving: 16.7637, relative: 83.2363, compMs: 4.3826, compThroughput: 23.365126, decompMs: 0.9138, decompThroughput: 112.059531, header: null, overhead: null, weissman: 1.0 }
-    ];
+    const csvUrl = new URL("benchmark_results.csv", window.location.href);
+    const numberFormat = new Intl.NumberFormat("es-AR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    const integerFormat = new Intl.NumberFormat("es-AR");
+    const palette = ["var(--own)", "var(--seven)", "var(--gzip)", "#526b61", "#4774a5", "#9b5a86"];
+    let rows = [];
+    let algorithms = [];
+    let colors = new Map();
+    let selectedFilter = "all";
 
-    const algorithms = [
-      { name: "Shannon O(2) (Propio)", short: "Shannon", color: "var(--own)" },
-      { name: "7-Zip LZMA2 (Externo)", short: "7-Zip LZMA2", color: "var(--seven)" },
-      { name: "gzip -6 (Baseline)", short: "gzip -6", color: "var(--gzip)" }
-    ];
-    const format = (value, digits = 2) => new Intl.NumberFormat("es-AR", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
-    const integer = value => new Intl.NumberFormat("es-AR").format(value);
-    const algorithmInfo = name => algorithms.find(item => item.name === name);
-    const performanceRows = rows.filter(row => row.original >= 1024);
+    const format = (value, digits = 2) => value === null || !Number.isFinite(value)
+      ? "N/A"
+      : new Intl.NumberFormat("es-AR", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+    const integer = value => integerFormat.format(value);
+    const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+    })[character]);
+    const algorithmColor = name => colors.get(name) || "#526b61";
+    const shortName = name => name.replace(/\s*\([^)]*\)/g, "").trim();
+    const setStatus = (message, isError = false) => {
+      document.getElementById("load-message").textContent = message;
+      document.getElementById("load-status").dataset.state = isError ? "error" : "ready";
+    };
+
+    function parseCsv(text) {
+      const records = [];
+      let record = [];
+      let field = "";
+      let quoted = false;
+
+      for (let index = 0; index < text.length; index += 1) {
+        const character = text[index];
+        if (quoted) {
+          if (character === '"' && text[index + 1] === '"') {
+            field += '"';
+            index += 1;
+          } else if (character === '"') {
+            quoted = false;
+          } else {
+            field += character;
+          }
+        } else if (character === '"' && field.length === 0) {
+          quoted = true;
+        } else if (character === ",") {
+          record.push(field);
+          field = "";
+        } else if (character === "\n" || character === "\r") {
+          if (character === "\r" && text[index + 1] === "\n") index += 1;
+          record.push(field);
+          if (record.some(value => value.length > 0)) records.push(record);
+          record = [];
+          field = "";
+        } else {
+          field += character;
+        }
+      }
+
+      if (quoted) throw new Error("El CSV tiene un campo entre comillas sin cerrar.");
+      if (field.length > 0 || record.length > 0) {
+        record.push(field);
+        records.push(record);
+      }
+      if (records.length < 2) throw new Error("El CSV no contiene filas de resultados.");
+
+      const headers = records[0].map((header, index) =>
+        index === 0 ? header.replace(/^\uFEFF/, "") : header
+      );
+      const required = [
+        "Archivo", "Algoritmo", "Tam_Original_bytes", "Tam_Comprimido_bytes",
+        "Ratio", "Ahorro_pct", "Tam_Relativo_pct", "Tiempo_Compresion_ms",
+        "Throughput_Compresion_MB_s", "Tiempo_Descompresion_ms",
+        "Throughput_Descompresion_MB_s", "Cabecera_bytes",
+        "Overhead_Cabecera_pct", "Weissman_Global"
+      ];
+      const missing = required.filter(header => !headers.includes(header));
+      if (missing.length) throw new Error(`Faltan columnas: ${missing.join(", ")}`);
+
+      const numeric = value => {
+        if (value === "" || value === "N/A") return null;
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) throw new Error(`Valor numerico invalido: ${value}`);
+        return parsed;
+      };
+
+      return records.slice(1).map(record => {
+        const values = Object.fromEntries(headers.map((header, index) => [header, record[index] ?? ""]));
+        return {
+          file: values.Archivo,
+          algorithm: values.Algoritmo,
+          original: numeric(values.Tam_Original_bytes),
+          compressed: numeric(values.Tam_Comprimido_bytes),
+          ratio: numeric(values.Ratio),
+          saving: numeric(values.Ahorro_pct),
+          relative: numeric(values.Tam_Relativo_pct),
+          compMs: numeric(values.Tiempo_Compresion_ms),
+          compThroughput: numeric(values.Throughput_Compresion_MB_s),
+          decompMs: numeric(values.Tiempo_Descompresion_ms),
+          decompThroughput: numeric(values.Throughput_Descompresion_MB_s),
+          header: numeric(values.Cabecera_bytes),
+          overhead: numeric(values.Overhead_Cabecera_pct),
+          weissman: numeric(values.Weissman_Global)
+        };
+      });
+    }
+
+    function renderSummary() {
+      const performanceRows = rows.filter(row => row.original >= 1024);
+      const aggregateRows = performanceRows.length ? performanceRows : rows;
+      const totalOriginal = [...new Map(aggregateRows.map(row => [row.file, row.original])).values()]
+        .reduce((sum, size) => sum + size, 0);
+      const totals = algorithms.map(name => {
+        const selected = aggregateRows.filter(row => row.algorithm === name);
+        const compressed = selected.reduce((sum, row) => sum + row.compressed, 0);
+        return { name, compressed, ratio: compressed ? totalOriginal / compressed : 0 };
+      }).filter(item => item.compressed > 0);
+      const bestRatio = [...totals].sort((a, b) => b.ratio - a.ratio)[0];
+      const savings = totals.map(item => ({ ...item, saving: (1 - item.compressed / totalOriginal) * 100 }));
+      const bestSaving = [...savings].sort((a, b) => b.saving - a.saving)[0];
+      const weissmanByAlgorithm = algorithms.map(name => ({
+        name,
+        value: aggregateRows.find(row => row.algorithm === name && row.weissman !== null)?.weissman ?? null
+      })).filter(item => item.value !== null);
+      const bestWeissman = [...weissmanByAlgorithm].sort((a, b) => b.value - a.value)[0];
+      const fileCount = new Set(rows.map(row => row.file)).size;
+
+      document.getElementById("best-ratio").textContent = bestRatio ? `${format(bestRatio.ratio, 3)}×` : "N/A";
+      document.getElementById("best-ratio-note").textContent = bestRatio ? `${bestRatio.name} · ${aggregateRows.length ? fileCount : 0} archivos considerados` : "Sin datos suficientes";
+      document.getElementById("best-weissman").textContent = bestWeissman ? format(bestWeissman.value, 3) : "N/A";
+      document.getElementById("best-weissman-note").textContent = bestWeissman ? bestWeissman.name : "Score no informado en CSV";
+      document.getElementById("best-saving").textContent = bestSaving ? `${format(bestSaving.saving)}%` : "N/A";
+      document.getElementById("best-saving-note").textContent = bestSaving ? `${bestSaving.name} · ${integer(totalOriginal)} bytes originales` : "Sin datos suficientes";
+      document.getElementById("measurement-count").textContent = integer(rows.length);
+      document.getElementById("measurement-note").textContent = `${fileCount} archivos · ${algorithms.length} algoritmos`;
+      document.getElementById("scope-label").textContent = `${fileCount} archivos · resumen calculado desde el CSV`;
+    }
+
+    function renderLegend() {
+      document.getElementById("chart-legend").innerHTML = algorithms.map(name =>
+        `<li><span class="swatch" style="--swatch:${algorithmColor(name)}"></span>${escapeHtml(shortName(name))}</li>`
+      ).join("");
+      const filters = document.querySelector(".filters");
+      filters.innerHTML = `<button class="filter" type="button" data-filter="all" aria-pressed="${selectedFilter === "all"}">Todos</button>` +
+        algorithms.map(name => `<button class="filter" type="button" data-filter="${escapeHtml(name)}" aria-pressed="${selectedFilter === name}">${escapeHtml(shortName(name))}</button>`).join("");
+      filters.querySelectorAll(".filter").forEach(button => {
+        button.addEventListener("click", () => {
+          selectedFilter = button.dataset.filter;
+          renderLegend();
+          renderTable();
+        });
+      });
+    }
 
     function renderRatioChart() {
       const tests = [...new Set(rows.map(row => row.file))];
@@ -359,61 +520,111 @@
         const testRows = rows.filter(row => row.file === file);
         const best = Math.max(...testRows.map(row => row.ratio));
         const size = testRows[0].original;
-        const label = file.replace("prueba_", "").replace(".txt", "").replaceAll("_", " ");
+        const label = file.replace(/\.[^.]+$/, "").replaceAll("_", " ");
         return `<div class="chart-row">
-          <div class="case-name">${label}<span class="case-size">${integer(size)} bytes originales</span></div>
+          <div class="case-name">${escapeHtml(label)}<span class="case-size">${integer(size)} bytes originales</span></div>
           <div class="bars">${testRows.map(row => {
-            const info = algorithmInfo(row.algorithm);
-            const width = Math.max(1, row.ratio / best * 100);
-            return `<div class="bar-line"><span class="bar-name">${info.short}</span><div class="track"><div class="bar" style="--width:${width}%;--color:${info.color}"></div></div><span class="bar-value">${format(row.ratio, 2)}×</span></div>`;
+            const width = best > 0 ? Math.max(1, row.ratio / best * 100) : 0;
+            return `<div class="bar-line"><span class="bar-name">${escapeHtml(shortName(row.algorithm))}</span><div class="track"><div class="bar" style="--width:${width}%;--color:${algorithmColor(row.algorithm)}"></div></div><span class="bar-value">${format(row.ratio, 2)}×</span></div>`;
           }).join("")}</div>
         </div>`;
       }).join("");
     }
 
     function renderSizeChart() {
-      const totals = algorithms.map(info => ({
-        ...info,
-        bytes: performanceRows.filter(row => row.algorithm === info.name).reduce((sum, row) => sum + row.compressed, 0)
-      }));
-      const max = Math.max(...totals.map(item => item.bytes));
+      const performanceRows = rows.filter(row => row.original >= 1024);
+      const selectedRows = performanceRows.length ? performanceRows : rows;
+      const totalOriginal = [...new Map(selectedRows.map(row => [row.file, row.original])).values()]
+        .reduce((sum, size) => sum + size, 0);
+      const totals = algorithms.map(name => ({
+        name,
+        bytes: selectedRows.filter(row => row.algorithm === name).reduce((sum, row) => sum + row.compressed, 0)
+      })).filter(item => item.bytes > 0);
+      const max = Math.max(...totals.map(item => item.bytes), 1);
       document.getElementById("size-chart").innerHTML = totals.map(item => {
-        const saving = (1 - item.bytes / 307200) * 100;
-        return `<div class="ratio-item"><div class="ratio-top"><span class="ratio-alg">${item.short}</span><span><span class="ratio-number">${integer(item.bytes)}</span> bytes</span></div><div class="ratio-track"><div class="ratio-fill" style="--width:${item.bytes / max * 100}%;--color:${item.color}"></div></div><div class="metric-note">Ahorro agregado: ${format(saving)}% · ratio ${format(307200 / item.bytes, 3)}×</div></div>`;
+        const saving = totalOriginal ? (1 - item.bytes / totalOriginal) * 100 : null;
+        const ratio = item.bytes ? totalOriginal / item.bytes : null;
+        return `<div class="ratio-item"><div class="ratio-top"><span class="ratio-alg">${escapeHtml(shortName(item.name))}</span><span><span class="ratio-number">${integer(item.bytes)}</span> bytes</span></div><div class="ratio-track"><div class="ratio-fill" style="--width:${item.bytes / max * 100}%;--color:${algorithmColor(item.name)}"></div></div><div class="metric-note">Ahorro agregado: ${format(saving)}% · ratio ${format(ratio, 3)}×</div></div>`;
       }).join("");
     }
 
-    function renderTable(filter = "all") {
-      const visible = rows.filter(row => filter === "all" || row.algorithm === filter);
+    function renderInsight() {
+      const expansion = [...rows].filter(row => row.saving !== null).sort((a, b) => a.saving - b.saving)[0];
+      const copy = document.getElementById("insight-copy");
+      if (!expansion || expansion.saving >= 0) {
+        copy.textContent = "Ninguna fila del CSV muestra expansion del archivo.";
+        return;
+      }
+      copy.textContent = `${expansion.algorithm} produce el mayor aumento: ${integer(expansion.compressed)} bytes desde ${integer(expansion.original)} (${format(Math.abs(expansion.saving))}% de aumento) en ${expansion.file}.`;
+    }
+
+    function renderTable() {
+      const visible = rows.filter(row => selectedFilter === "all" || row.algorithm === selectedFilter);
       document.getElementById("results-body").innerHTML = visible.map(row => {
-        const info = algorithmInfo(row.algorithm);
-        const savingClass = row.saving < 0 ? "negative" : "positive";
+        const savingClass = row.saving !== null && row.saving < 0 ? "negative" : "positive";
         return `<tr>
-          <td>${row.file}</td>
-          <td><span class="algorithm-cell"><span class="algo-dot" style="--color:${info.color}"></span>${row.algorithm}</span></td>
+          <td>${escapeHtml(row.file)}</td>
+          <td><span class="algorithm-cell"><span class="algo-dot" style="--color:${algorithmColor(row.algorithm)}"></span>${escapeHtml(row.algorithm)}</span></td>
           <td>${integer(row.original)}</td><td>${integer(row.compressed)}</td>
           <td>${format(row.ratio, 3)}×</td><td class="${savingClass}">${format(row.saving)}%</td>
           <td>${format(row.compMs, 4)}</td><td>${format(row.compThroughput, 3)}</td>
           <td>${format(row.decompMs, 4)}</td><td>${format(row.decompThroughput, 3)}</td>
           <td>${row.header === null ? "N/A" : integer(row.header)}</td>
-          <td>${row.overhead === null ? "N/A" : `${format(row.overhead, 2)}%`}</td>
+          <td>${row.overhead === null ? "N/A" : `${format(row.overhead)}%`}</td>
           <td>${format(row.weissman, 3)}</td>
         </tr>`;
       }).join("");
       document.getElementById("row-count").textContent = `${visible.length} filas visibles de ${rows.length}`;
     }
 
-    document.querySelectorAll(".filter").forEach(button => {
-      button.addEventListener("click", () => {
-        document.querySelectorAll(".filter").forEach(item => item.setAttribute("aria-pressed", "false"));
-        button.setAttribute("aria-pressed", "true");
-        renderTable(button.dataset.filter);
-      });
+    function renderReport(csvText) {
+      rows = parseCsv(csvText);
+      if (rows.some(row => !row.file || !row.algorithm || row.original === null || row.compressed === null)) {
+        throw new Error("Hay filas sin archivo, algoritmo o tamanos validos.");
+      }
+      algorithms = [...new Set(rows.map(row => row.algorithm))];
+      colors = new Map(algorithms.map((name, index) => [name, palette[index % palette.length]]));
+      if (!algorithms.includes(selectedFilter)) selectedFilter = "all";
+      renderSummary();
+      renderLegend();
+      renderRatioChart();
+      renderSizeChart();
+      renderInsight();
+      renderTable();
+    }
+
+    async function loadCsv() {
+      setStatus("Leyendo benchmark_results.csv...");
+      try {
+        const response = await fetch(csvUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        renderReport(await response.text());
+        setStatus(`CSV leído al abrir: ${rows.length} filas · ${new Date().toLocaleTimeString("es-AR")}`);
+      } catch (error) {
+        const fileProtocol = window.location.protocol === "file:";
+        const detail = fileProtocol
+          ? "El navegador bloquea la lectura del CSV vecino en file://. Abre la carpeta results con un servidor HTTP local o usa Elegir archivo."
+          : `No se pudo cargar el CSV (${error.message}). Usa Elegir archivo para cargarlo manualmente.`;
+        setStatus(detail, true);
+      }
+    }
+
+    document.getElementById("reload-csv").addEventListener("click", loadCsv);
+    document.getElementById("choose-csv").addEventListener("click", () =>
+      document.getElementById("csv-file").click()
+    );
+    document.getElementById("csv-file").addEventListener("change", async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        renderReport(await file.text());
+        setStatus(`CSV leído: ${file.name} · ${rows.length} filas`);
+      } catch (error) {
+        setStatus(`CSV inválido: ${error.message}`, true);
+      }
     });
 
-    renderRatioChart();
-    renderSizeChart();
-    renderTable();
+    loadCsv();
   </script>
 </body>
 </html>

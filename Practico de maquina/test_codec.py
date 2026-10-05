@@ -87,7 +87,10 @@ class CodecTests(unittest.TestCase):
         truncated = self.directory / "cli-short.tdi"
         output = self.directory / "cli-short.out"
         truncated.write_bytes(archive.read_bytes()[:-1])
-        script = Path(__file__).parent.parent / "decompressor.py"
+        project_directory = Path(__file__).resolve().parent
+        if not (project_directory / "decompressor.py").is_file():
+            project_directory = project_directory.parent
+        script = project_directory / "decompressor.py"
 
         result = subprocess.run(
             [sys.executable, str(script), str(truncated), str(output)],

@@ -37,11 +37,11 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
   compressed_size = os.path.getsize(input_path)
 
   with open(input_path, "rb") as in_file:
-    magic = _read_exact(in_file, 4, "magic bytes")
+    magic = in_file.read(4) # nuestro magic byte son los primeros 4 bytes
     if magic != MAGIC:
       raise ValueError("Formato incompatible: se esperaba un archivo TDI2.")
 
-    header_data = _read_exact(in_file, HEADER_SIZE, "cabecera TDI2")
+    header_data = in_file.read(HEADER_SIZE)
     (
       original_size,
       bit_length,
@@ -63,7 +63,7 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
     freq_map = {}
     for _ in range(num_entries):
       byte_1, byte_2, count = struct.unpack(
-        ENTRY_FORMAT, _read_exact(in_file, ENTRY_SIZE, "tabla de frecuencias")
+        ENTRY_FORMAT, in_file.read(ENTRY_SIZE)
       )
       pair = (byte_1, byte_2)
       if pair in freq_map or count == 0:
@@ -141,12 +141,12 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
 
 
 if __name__ == "__main__":
-  if len(sys.argv) != 3:
-    print("Uso: python decompressor.py <salida.tdi> <reconstruido.txt>")
+  if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != "-q"):
+    print("Uso: python decompressor.py <salida.tdi> <reconstruido.txt> [-q]")
     sys.exit(1)
 
   try:
-    decompress(sys.argv[1], sys.argv[2])
+    decompress(sys.argv[1], sys.argv[2], verbose=len(sys.argv) == 3)
   except (OSError, ValueError, struct.error) as error:
     print(f"Error: {error}", file=sys.stderr)
     sys.exit(1)

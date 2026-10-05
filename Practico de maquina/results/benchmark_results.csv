@@ -1,13 +1,13 @@
 Archivo,Algoritmo,Tam_Original_bytes,Tam_Comprimido_bytes,Ratio,Ahorro_pct,Tam_Relativo_pct,Tiempo_Compresion_ms,Throughput_Compresion_MB_s,Tiempo_Descompresion_ms,Throughput_Descompresion_MB_s,Cabecera_bytes,Overhead_Cabecera_pct,Weissman_Global
-prueba_1_pequena.txt,Shannon O(2) (Propio),64,275,0.232727,-329.6875,429.6875,0.5053,0.126657,0.6525,0.098084,257,93.4545,0.115228
-prueba_1_pequena.txt,7-Zip LZMA2 (Externo),64,195,0.328205,-204.6875,304.6875,19.4123,0.003297,16.7521,0.00382,N/A,N/A,0.460802
-prueba_1_pequena.txt,gzip -6 (Baseline),64,59,1.084746,7.8125,92.1875,1.2012,0.05328,0.6127,0.104456,N/A,N/A,1.0
-prueba_2_texto_natural.txt,Shannon O(2) (Propio),102400,53414,1.9171,47.8379,52.1621,73.9022,1.385615,107.5427,0.95218,3117,5.8355,0.115228
-prueba_2_texto_natural.txt,7-Zip LZMA2 (Externo),102400,1424,71.910112,98.6094,1.3906,19.5908,5.226943,16.2201,6.313155,N/A,N/A,0.460802
-prueba_2_texto_natural.txt,gzip -6 (Baseline),102400,1919,53.361126,98.126,1.874,1.3565,75.488389,0.7387,138.621903,N/A,N/A,1.0
-prueba_3_alta_repeticion.txt,Shannon O(2) (Propio),102400,30107,3.401202,70.5986,29.4014,43.2379,2.368293,64.3391,1.591567,357,1.1858,0.115228
-prueba_3_alta_repeticion.txt,7-Zip LZMA2 (Externo),102400,305,335.737705,99.7021,0.2979,19.0879,5.364655,15.8287,6.469262,N/A,N/A,0.460802
-prueba_3_alta_repeticion.txt,gzip -6 (Baseline),102400,914,112.035011,99.1074,0.8926,1.6458,62.218982,0.7783,131.568804,N/A,N/A,1.0
-prueba_4_baja_repeticion.txt,Shannon O(2) (Propio),102400,176820,0.57912,-72.6758,172.6758,139.3285,0.734954,205.1726,0.499092,89997,50.8975,0.115228
-prueba_4_baja_repeticion.txt,7-Zip LZMA2 (Externo),102400,86028,1.19031,15.9883,84.0117,23.3868,4.378538,17.8796,5.727197,N/A,N/A,0.460802
-prueba_4_baja_repeticion.txt,gzip -6 (Baseline),102400,85234,1.201399,16.7637,83.2363,3.6613,27.968208,0.973,105.241521,N/A,N/A,1.0
+prueba_1_pequena.txt,Shannon O(2) (Propio),64,275,0.232727,-329.6875,429.6875,43.2335,0.00148,35.6153,0.001797,257,93.4545,0.232406
+prueba_1_pequena.txt,7-Zip LZMA2 (Externo),64,195,0.328205,-204.6875,304.6875,18.9157,0.003383,16.7056,0.003831,N/A,N/A,0.970188
+prueba_1_pequena.txt,gzip -6 (Baseline),64,59,1.084746,7.8125,92.1875,17.5275,0.003651,63.0391,0.001015,N/A,N/A,1.0
+prueba_2_texto_natural.txt,Shannon O(2) (Propio),102400,53414,1.9171,47.8379,52.1621,100.0839,1.023142,153.2284,0.668283,3117,5.8355,0.232406
+prueba_2_texto_natural.txt,7-Zip LZMA2 (Externo),102400,1424,71.910112,98.6094,1.3906,23.2017,4.41347,17.9548,5.70321,N/A,N/A,0.970188
+prueba_2_texto_natural.txt,gzip -6 (Baseline),102400,1919,53.361126,98.126,1.874,19.3164,5.301195,63.1567,1.621364,N/A,N/A,1.0
+prueba_3_alta_repeticion.txt,Shannon O(2) (Propio),102400,30107,3.401202,70.5986,29.4014,78.5698,1.3033,95.5019,1.07223,357,1.1858,0.232406
+prueba_3_alta_repeticion.txt,7-Zip LZMA2 (Externo),102400,305,335.737705,99.7021,0.2979,17.6819,5.791233,15.7899,6.485158,N/A,N/A,0.970188
+prueba_3_alta_repeticion.txt,gzip -6 (Baseline),102400,914,112.035011,99.1074,0.8926,17.1109,5.984489,63.5599,1.611079,N/A,N/A,1.0
+prueba_4_baja_repeticion.txt,Shannon O(2) (Propio),102400,176820,0.57912,-72.6758,172.6758,167.2304,0.612329,247.3207,0.414037,89997,50.8975,0.232406
+prueba_4_baja_repeticion.txt,7-Zip LZMA2 (Externo),102400,86028,1.19031,15.9883,84.0117,22.5549,4.540033,17.3441,5.904025,N/A,N/A,0.970188
+prueba_4_baja_repeticion.txt,gzip -6 (Baseline),102400,85207,1.201779,16.79,83.21,18.9361,5.40766,62.5062,1.638237,N/A,N/A,1.0

@@ -56,16 +56,18 @@ escribe una salida parcial.
 ## Benchmark
 
 Se comparan Shannon propio, 7-Zip 7z/LZMA2 con `-mx=5` (Normal) y gzip nivel
-6. El baseline gzip omite nombre y timestamp (`filename=""`, `mtime=0`), de
-acuerdo con `gzip -n -6`. El benchmark busca primero `7z.exe` junto al codigo
-y luego `7z`/`7za` en `PATH`.
+6. El baseline gzip omite nombre y timestamp (`-n -6`). `gzip` y `7z` se
+resuelven desde `PATH`; si `7z` no esta disponible ahi, se acepta `7z.exe`
+junto al codigo.
 
 Cada medicion se repite tres veces y se informa la mediana. La salida se
 descomprime y compara byte a byte antes de registrar el resultado. El CSV
 incluye ratio, ahorro, tamano relativo, cabecera y overhead cuando aplican,
 tiempos y throughput de compresion/descompresion. Se usa MB decimal
-(1.000.000 bytes). Los tiempos Python son in-process; los de 7-Zip incluyen
-la invocacion de su CLI.
+(1.000.000 bytes). Los tres compresores y descompresores se ejecutan por CLI
+mediante la misma funcion de medicion, por lo que el tiempo incluye el inicio
+del proceso. El decoder propio acepta `-q` para evitar imprimir metricas en
+cada repeticion del benchmark.
 
 El Weissman global excluye archivos menores de 1 KiB, calcula el ratio con
 las sumas del corpus de rendimiento y usa la mediana de los tiempos totales
