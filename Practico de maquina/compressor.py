@@ -95,18 +95,12 @@ def compress(input_path: str, output_path: str, verbose: bool = True):
 
 
 if __name__ == "__main__":
-    verbose = False
-    if len(sys.argv) != 3:
-      if len(sys.argv) == 4:
-        if sys.argv[3] != '-v':
-          print("Uso: python compressor.py <archivo_entrada> <salida.tdi> -v (optional)")
-          sys.exit(1)
-        verbose = True
-      else: 
-          print("Uso: python compressor.py <archivo_entrada> <salida.tdi> -v (optional)")
-          sys.exit(1)
-    try:
-      compress(sys.argv[1], sys.argv[2], verbose)
-    except (OSError, ValueError, struct.error) as error:
-      print(f"Error: {error}", file=sys.stderr)
-      sys.exit(1)
+  if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != "-q"):
+    print("Uso: python compressor.py <archivo_entrada> <salida.tdi> [-q]")
+    sys.exit(1)
+
+  try:
+    compress(sys.argv[1], sys.argv[2], verbose=len(sys.argv) == 3)
+  except (OSError, ValueError, struct.error) as error:
+    print(f"Error: {error}", file=sys.stderr)
+    sys.exit(1)

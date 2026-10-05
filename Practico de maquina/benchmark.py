@@ -41,7 +41,7 @@ def _build_algorithms():
       "name": ALGORITHMS[0],
       "suffix": ".tdi",
       "compress": {
-        "command": [python, os.path.join(BASE_DIR, "compressor.py"), "{input}", "{output}"],
+        "command": [python, os.path.join(BASE_DIR, "compressor.py"), "{input}", "{output}", "-q"],
       },
       "decompress": {
         "command": [python, os.path.join(BASE_DIR, "decompressor.py"), "{input}", "{output}", "-q"],
@@ -78,6 +78,7 @@ def _build_algorithms():
 
 
 def _execute_command(action, input_path, output_path):
+  # completar los campos en el comando
   command = [
     part.format(input=input_path, output=output_path)
     for part in action["command"]
