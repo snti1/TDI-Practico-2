@@ -1,3 +1,4 @@
+import re, subprocess
 import csv
 import filecmp
 import math
@@ -25,6 +26,8 @@ RESULTS_DIR = os.path.join(BASE_DIR, "results")
 TEMP_DIR = os.path.join(BASE_DIR, "temp_benchmark")
 REPEAT_COUNT = 3
 SMALL_FILE_LIMIT = 1024
+GZIP_HEADER = 10
+GZIP_TRAILER = 8
 ALGORITHMS = (
   "Shannon O(2) (Propio)",
   "7-Zip LZMA2 (Externo)",
@@ -55,7 +58,7 @@ def _build_algorithms():
         "command": ["7z", "x", "-so", "-bd", "{input}"],
         "stdout_to_output": True,
       },
-      "header_size": None,
+      "header_size": _7z_header_size,
     },
     {
       "name": ALGORITHMS[2],
@@ -69,7 +72,7 @@ def _build_algorithms():
         "command": ["gzip", "-d", "-c", "{input}"],
         "stdout_to_output": True,
       },
-      "header_size": None,
+      "header_size":_gzip_header_size,
     },
   ]
 
@@ -131,6 +134,24 @@ def calculate_weissman(r_global, r_ref, t_global, t_ref, alpha=1.0):
     return None
   return alpha * (r_global / r_ref) * (math.log(t_ref) / math.log(t_global))
 
+def _7z_header_size(archive_path):
+    out = subprocess.run(
+        ["7z", "l", "-slt", archive_path],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    m = re.search(r"^Headers Size = (\d+)", out, re.M)
+    if not m:
+        raise ValueError("7z no informó 'Headers Size'")
+    return int(m.group(1))
+
+def _gzip_header_size(archive_path):
+    with open(archive_path, "rb") as f:
+        head = f.read(GZIP_HEADER)
+    if len(head) < GZIP_HEADER or head[:2] != b"\x1f\x8b":
+        raise ValueError("No es un archivo gzip válido")
+    if head[3] != 0:  # FLG: con -n no debería haber FNAME/FEXTRA/FCOMMENT
+        raise ValueError("gzip con campos opcionales; no se esperaba con -n")
+    return GZIP_HEADER + GZIP_TRAILER   # 18 bytes
 
 def _tdi_header_size(archive_path):
     header_size = struct.calcsize(HEADER_FORMAT)
