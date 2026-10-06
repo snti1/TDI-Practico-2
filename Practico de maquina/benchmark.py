@@ -6,7 +6,6 @@ import os
 import shutil
 import statistics
 import struct
-import subprocess
 import sys
 import time
 from contextlib import ExitStack
@@ -25,6 +24,8 @@ TEST_FILES = [
 ]
 RESULTS_DIR = os.path.join(BASE_DIR, "results")
 TEMP_DIR = os.path.join(BASE_DIR, "temp_benchmark")
+if not os.path.exists(TEMP_DIR):
+  os.makedirs(TEMP_DIR)
 REPEAT_COUNT = 3
 SMALL_FILE_LIMIT = 1024
 GZIP_HEADER = 10
