@@ -6,6 +6,7 @@ import time
 
 from bit_stream import BitWriter
 from shannon import generate_shannon_o2_codes, get_pairs_and_padding, ENTRY_FORMAT, HEADER_FORMAT, MAGIC
+from varint import encode_uvarint
 
 
 def _same_path(first_path: str, second_path: str) -> bool:
@@ -15,7 +16,7 @@ def _same_path(first_path: str, second_path: str) -> bool:
 
 
 def compress(input_path: str, output_path: str, verbose: bool = True):
-  """Comprime un archivo y guarda un contenedor TDI2 autocontenible."""
+  """Comprime un archivo y guarda un contenedor TDI3 autocontenible."""
   if not os.path.isfile(input_path):
     raise FileNotFoundError(f"El archivo de entrada '{input_path}' no existe.")
   if _same_path(input_path, output_path):
@@ -56,7 +57,8 @@ def compress(input_path: str, output_path: str, verbose: bool = True):
 
     # aca escribimos las frecuencias de los simbolos...
     for (byte_1, byte_2), count in sorted(freq_map.items()):
-      output_file.write(struct.pack(ENTRY_FORMAT, byte_1, byte_2, count))
+      output_file.write(struct.pack(ENTRY_FORMAT, byte_1, byte_2)) # primero escribimos los dos simbolos
+      output_file.write(encode_uvarint(count))                     # y despues el numero en ULEB128
 
     header_size = output_file.tell()
 

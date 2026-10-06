@@ -11,6 +11,7 @@ import sys
 import time
 from contextlib import ExitStack
 from shannon import ENTRY_FORMAT, HEADER_FORMAT, MAGIC
+from varint import read_uvarint
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_FILES = [
@@ -155,16 +156,23 @@ def _gzip_header_size(archive_path):
     return GZIP_HEADER + GZIP_TRAILER   # 18 bytes
 
 def _tdi_header_size(archive_path):
-    header_size = struct.calcsize(HEADER_FORMAT)
-    with open(archive_path, "rb") as archive:
-        archive.seek(len(MAGIC))          # saltear el magic
-        header = archive.read(header_size)
+  fixed_header_size = struct.calcsize(HEADER_FORMAT)
+  with open(archive_path, "rb") as archive:
+    if archive.read(len(MAGIC)) != MAGIC:
+      raise ValueError("El archivo propio no es un contenedor TDI3.")
 
-    if len(header) < header_size:
-        raise ValueError("Archivo truncado: cabecera incompleta")
+    header = archive.read(fixed_header_size)
+    if len(header) != fixed_header_size:
+      raise ValueError("Archivo truncado: cabecera incompleta")
 
     fields = struct.unpack(HEADER_FORMAT, header)
-    return len(MAGIC) + header_size + fields[3] * struct.calcsize(ENTRY_FORMAT)
+    entry_size = struct.calcsize(ENTRY_FORMAT)
+    for _ in range(fields[3]):
+      if len(archive.read(entry_size)) != entry_size:
+        raise ValueError("Archivo truncado: tabla de frecuencias incompleta")
+      read_uvarint(archive)
+
+    return archive.tell()
 
 def _make_row(file_name, algorithm, input_path, archive_path, compress_samples, decompress_samples, header_size=None):
   original_size = os.path.getsize(input_path)

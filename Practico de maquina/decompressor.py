@@ -6,6 +6,7 @@ import time
 
 from bit_stream import BitReader
 from shannon import generate_shannon_o2_codes_from_freq, ENTRY_FORMAT, HEADER_FORMAT, MAGIC
+from varint import read_uvarint
 
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 ENTRY_SIZE = struct.calcsize(ENTRY_FORMAT)
@@ -24,7 +25,7 @@ def _same_path(first_path: str, second_path: str) -> bool:
 
 
 def decompress(input_path: str, output_path: str, verbose: bool = True):
-  """Descomprime y valida un contenedor TDI2 antes de escribir la salida."""
+  """Descomprime y valida un contenedor TDI3 antes de escribir la salida."""
   if not os.path.isfile(input_path):
     raise FileNotFoundError(f"El archivo de entrada '{input_path}' no existe.")
   if _same_path(input_path, output_path):
@@ -36,7 +37,7 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
   with open(input_path, "rb") as in_file:
     magic = in_file.read(4) # nuestro magic byte son los primeros 4 bytes
     if magic != MAGIC:
-      raise ValueError("Formato incompatible: se esperaba un archivo TDI2.")
+      raise ValueError("Formato incompatible: se esperaba un archivo TDI3.")
 
     # leemos la cabecera del archivo
     header_data = in_file.read(HEADER_SIZE)
@@ -61,9 +62,9 @@ def decompress(input_path: str, output_path: str, verbose: bool = True):
     # leemos la tabla de frecuencias de simbolos...
     freq_map = {}
     for _ in range(num_entries):
-      byte_1, byte_2, count = struct.unpack(
-        ENTRY_FORMAT, in_file.read(ENTRY_SIZE)
-      )
+      pair_data = _read_exact(in_file, ENTRY_SIZE, "par de bytes")
+      byte_1, byte_2 = struct.unpack(ENTRY_FORMAT, pair_data)
+      count = read_uvarint(in_file) # leemos la frecuencia, que se representa como ULEB128
       pair = (byte_1, byte_2)
       if pair in freq_map or count == 0:
         raise ValueError("La tabla contiene pares duplicados o frecuencia cero.")

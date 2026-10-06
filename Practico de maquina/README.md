@@ -7,10 +7,11 @@ fuente de orden 2, un descompresor y un benchmark contra 7-Zip LZMA2 y gzip-6.
 
 | Archivo | Funcion |
 | --- | --- |
-| `compressor.py` | Cuenta pares de bytes, genera codigos Shannon y escribe TDI2. |
-| `decompressor.py` | Lee el archivo .tdi, regenera los codigos, reconstruye y valida el original. |
+| `compressor.py` | Cuenta pares de bytes, genera codigos Shannon y escribe TDI3. |
+| `decompressor.py` | Lee TDI3, regenera los codigos, reconstruye y valida el original. |
 | `shannon.py` | Agrupa bytes y calcula frecuencias y codigos de Shannon. |
 | `bit_stream.py` | Empaqueta y lee codigos de longitud variable bit a bit. |
+| `varint.py` | Codifica y lee frecuencias como enteros ULEB128 sin signo. |
 | `benchmark.py` | Ejecuta compresores/descompresores, mide y genera CSV. |
 | `tests/` | Corpus de cuatro archivos y su documentacion. |
 | `results/benchmark_results.csv` | Ultimo conjunto de resultados guardado. |
@@ -42,24 +43,33 @@ los codigos.
 
 Estas clases son necesarias, debido a que los códigos de Shannon tienen longitudes variables.
 
-## Formato TDI2
+## Formato TDI3
 
-Todos los enteros usan big-endian. TDI2 es autocontenible: el descompresor no
-necesita el archivo original para reconstruir el modelo de codigos.
+Los campos de la cabecera fija usan big-endian. TDI3 es autocontenible: el
+descompresor no necesita el archivo original para reconstruir el modelo de
+codigos. El cambio de TDI2 a TDI3 introduce frecuencias de longitud variable;
+los contenedores TDI2 anteriores no son compatibles y deben generarse de nuevo.
 Formato de la cabecera: 
 
 | Campo | Tamano | Descripcion |
 | --- | ---: | --- |
-| Magic/version | 4 bytes | `TDI2`. |
+| Magic/version | 4 bytes | `TDI3`. |
 | Tamano original | 8 bytes | Cantidad de bytes a reconstruir. |
 | Longitud del payload | 8 bytes | Bits validos del flujo codificado. |
 | Padding de pares | 1 byte | Indica si se agrego el cero final para completar un par. |
 | Cantidad de pares distintos | 4 bytes | Numero de entradas de la tabla. |
 | SHA-256 original | 32 bytes | Digest del contenido sin padding. |
-| Entrada de frecuencia | 10 bytes c/u | Primer byte, segundo byte y frecuencia de 8 bytes. |
+| Entrada de frecuencia | 2 bytes + 1-10 bytes | Par de bytes y frecuencia uint64 en ULEB128. |
 | Payload | Variable | Codigos Shannon concatenados; padding fisico final con ceros. |
 
-La cabecera fija ocupa 57 bytes, antes de la tabla. El decoder comprueba
+La cabecera fija ocupa 57 bytes, antes de la tabla. Cada frecuencia se escribe
+como ULEB128: los 7 bits bajos de cada byte contienen parte del valor y el bit
+mas alto indica si sigue otro byte. Por tanto, frecuencias menores que 128
+usan un byte, mientras que uint64 puede ocupar como maximo diez. La tabla no
+tiene longitud fija por entrada; el numero de pares distintos de la cabecera
+indica cuantas entradas debe leer el decoder.
+
+El decoder comprueba
 magic, padding, frecuencias, longitud del payload, bits sobrantes y SHA-256
 antes de escribir la salida. Un error deja codigo de salida distinto de cero
 y no escribe una salida parcial. SHA-256 detecta corrupcion accidental; no
@@ -99,7 +109,7 @@ aritmetica de punto flotante para probabilidades y acumulados.
 `compressor.py` lee la entrada en modo binario, calcula su SHA-256, forma los
 pares y obtiene `codes` y `freq_map`. Calcula la longitud valida del payload
 como la suma de `frecuencia(par) * longitud(codigo(par))`. Escribe en la
-cabecera TDI2 el tamano original, esa longitud en bits, la bandera de padding,
+cabecera TDI3 el tamano original, esa longitud en bits, la bandera de padding,
 la cantidad de pares distintos y el SHA-256; a continuacion serializa cada
 par con su frecuencia.
 
@@ -109,7 +119,7 @@ bits y completa con ceros el ultimo byte fisico si no quedo lleno.
 
 ### Uso en el descompresor
 
-`decompressor.py` lee la cabecera y la tabla de frecuencias del TDI2. Llama a
+`decompressor.py` lee la cabecera y la tabla de frecuencias del TDI3. Llama a
 `generate_shannon_o2_codes_from_freq(freq_map)` para reconstruir el mismo
 diccionario y crea su inverso `codigo -> par`. No necesita la entrada original
 ni una copia expandida de los simbolos.
@@ -159,9 +169,18 @@ genere salida de consola. El programa acepta archivos vacios y exige que las
 rutas de entrada y salida sean distintas.
 
 La validacion comprueba que el tamano reconstruido sea el esperado y compara
-SHA-256 de la salida con el digest guardado en TDI2. Magic incorrecto, datos
+SHA-256 de la salida con el digest guardado en TDI3. Magic incorrecto, datos
 truncados, inconsistencias en la tabla, padding no valido o hash distinto
 producen un error.
+
+### Pruebas del formato
+
+```powershell
+python -m unittest discover -s tests -p test_tdi3_varint.py -v
+```
+
+La suite comprueba los limites uint64 de ULEB128, entradas truncadas o
+malformadas, round-trip TDI3 y rechazo del magic TDI2 anterior.
 
 ## Corpus
 
@@ -206,7 +225,7 @@ Todos estos datos se guardan en un archivo CSV.
 | Overhead (%) | Bytes de cabecera/framing / tamano comprimido * 100. |
 | Weissman global | Ratio y mediana del tiempo total, normalizados contra gzip-6. |
 
-Para el overhead, TDI2 cuenta magic, cabecera fija y tabla; 7-Zip informa el
+Para el overhead, TDI3 cuenta magic, cabecera fija y tabla; 7-Zip informa el
 tamano de sus headers; gzip se contabiliza como 18 bytes de framing (10 de
 header y 8 de trailer). El overhead no es directamente comparable entre
 formatos con estructuras distintas.
