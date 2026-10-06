@@ -65,6 +65,66 @@ antes de escribir la salida. Un error deja codigo de salida distinto de cero
 y no escribe una salida parcial. SHA-256 detecta corrupcion accidental; no
 proporciona autenticacion criptografica del contenedor.
 
+## Implementacion
+
+### Generacion de pares y frecuencias
+
+`get_pairs_and_padding(data)` en `shannon.py` toma los bytes leidos y los
+agrupa de a dos, sin solapamiento. Si la cantidad de bytes es impar, agrega
+un `0x00` para completar el ultimo par y devuelve una bandera que indica ese
+padding. Por ejemplo, `ABC` se transforma en los pares `(A, B)` y `(C, 0)`.
+
+`generate_shannon_o2_codes(pairs)` cuenta las apariciones de cada par con
+`Counter` y delega la asignacion a `generate_shannon_o2_codes_from_freq`.
+Esta ultima funcion recibe solo el mapa de frecuencias, por lo que tambien
+puede utilizarse al descomprimir sin expandir cada frecuencia en una lista de
+simbolos.
+
+### Asignacion de codigos Shannon
+
+La funcion suma las frecuencias para obtener la cantidad total de pares,
+ordena los simbolos por frecuencia decreciente y desempata usando el par de
+bytes. Para cada par calcula `p_i = frecuencia / total_pares` y la longitud
+`max(1, ceil(-log2(p_i)))`. Luego convierte a binario la probabilidad
+acumulada de los simbolos anteriores: multiplica repetidamente por dos y
+guarda los bits obtenidos hasta completar esa longitud. El resultado es un
+diccionario `par -> cadena de bits`.
+
+El orden de desempate y la tabla de frecuencias son importantes: el decoder
+debe regenerar exactamente los mismos codigos que el encoder. La funcion usa
+aritmetica de punto flotante para probabilidades y acumulados.
+
+### Uso en el compresor
+
+`compressor.py` lee la entrada en modo binario, calcula su SHA-256, forma los
+pares y obtiene `codes` y `freq_map`. Calcula la longitud valida del payload
+como la suma de `frecuencia(par) * longitud(codigo(par))`. Escribe en la
+cabecera TDI2 el tamano original, esa longitud en bits, la bandera de padding,
+la cantidad de pares distintos y el SHA-256; a continuacion serializa cada
+par con su frecuencia.
+
+Finalmente, recorre los pares originales en orden, busca el codigo de cada
+uno y se lo entrega a `BitWriter`. Este concatena los codigos en un flujo de
+bits y completa con ceros el ultimo byte fisico si no quedo lleno.
+
+### Uso en el descompresor
+
+`decompressor.py` lee la cabecera y la tabla de frecuencias del TDI2. Llama a
+`generate_shannon_o2_codes_from_freq(freq_map)` para reconstruir el mismo
+diccionario y crea su inverso `codigo -> par`. No necesita la entrada original
+ni una copia expandida de los simbolos.
+
+El decoder lee exactamente la cantidad de bits declarada en la cabecera con
+`BitReader`, agrega cada bit a un codigo parcial y consulta el diccionario
+inverso. Cuando encuentra un codigo completo, agrega sus dos bytes a la
+salida y reinicia el acumulador. Al terminar verifica que se hayan
+reconstruido todos los pares esperados, que el padding fisico sea cero y que
+el byte agregado para completar un par sea el esperado. Recorta el byte de
+padding cuando corresponde y compara el SHA-256 reconstruido con el guardado
+en la cabecera. Solo despues de estas comprobaciones escribe el archivo de
+salida.
+
+
 ## Requisitos
 
 - Python disponible como `python` en la terminal.
