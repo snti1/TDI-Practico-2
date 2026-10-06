@@ -173,15 +173,6 @@ SHA-256 de la salida con el digest guardado en TDI3. Magic incorrecto, datos
 truncados, inconsistencias en la tabla, padding no valido o hash distinto
 producen un error.
 
-### Pruebas del formato
-
-```powershell
-python -m unittest discover -s tests -p test_tdi3_varint.py -v
-```
-
-La suite comprueba los limites uint64 de ULEB128, entradas truncadas o
-malformadas, round-trip TDI3 y rechazo del magic TDI2 anterior.
-
 ## Corpus
 
 Los cuatro casos estan en `tests/` y se describen en
