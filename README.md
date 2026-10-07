@@ -1,7 +1,7 @@
 # Teoría de la Información - Trabajos Prácticos y Proyecto de Compresión
-
+**Grupo 3**
 **Carrera:** Licenciatura en Ciencias de la Computación  
-**Materia:** Teoría de la Información y Canales de Comunicación (Año 2026)  
+**Materia:** Teoría de la Información
 **Proyecto:** Implementación de Algoritmos de Codificación, Análisis de Fuentes con Memoria (Markov) y Práctico de Máquina 2 (Compresor de Autoría Propia).
 
 ---
@@ -40,7 +40,9 @@ Este repositorio reúne las resoluciones teóricas, desarrollos prácticos y la 
     │   │ 
     │   ├── README.md # Guía específica de ejecución y comandos 
     │   │ 
-    │   └── shannon.py # Algoritmo de Shannon y cálculo de frecuencias 
+    │   ├── shannon.py # Algoritmo de Shannon y cálculo de frecuencias
+    │   │ 
+    │   └── varint.py # Codificacion de enteros variables 
     │   
     ├── Practicos_Teoricos/ 
     │   │ 
